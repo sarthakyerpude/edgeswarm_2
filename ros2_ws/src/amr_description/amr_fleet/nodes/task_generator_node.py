@@ -33,8 +33,8 @@ class TaskGeneratorNode(Node):
         self.declare_parameter("num_tasks", 20)
         self.declare_parameter("seed", 42)
         # Flat [r,c,r,c,...] because ROS parameters do not support nested lists.
-        self.declare_parameter("pickup_cells", [12, 10, 12, 20, 20, 28])
-        self.declare_parameter("dropoff_cells", [31, 4, 31, 8, 31, 12])
+        self.declare_parameter("pickup_cells", [89, 26, 89, 93, 74, 26])
+        self.declare_parameter("dropoff_cells", [22, 30, 22, 60, 22, 90])
         self.declare_parameter("priority_weights", [0.5, 0.3, 0.15, 0.05])
 
         self.rng = random.Random(int(self.get_parameter("seed").value))
