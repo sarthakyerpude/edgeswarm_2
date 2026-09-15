@@ -11,12 +11,14 @@
 # /tf is included per this task's spec even though amr_description's docs
 # say the coordination layer doesn't need it (it works in the map frame) -
 # it's here for RViz / the nav stack / anything else that does need TF.
+# Source: DiffDrive's own built-in tf publisher (/model/<name>/tf), which
+# uses the same wheel-encoder odometry as /model/<name>/odometry and fills
+# in frame_id/child_frame_id - not a separate PosePublisher plugin.
 #
 # To extend to robot_2 / robot_3 for a future three-robot launch file, copy
 # each block below and swap "robot_1" for the new robot name - the gz side
 # topic names update automatically because the model is spawned with that
 # name (see amr_description/models/amr_robot/model.sdf).
-
 
 - ros_topic_name: "/clock"
   gz_topic_name: "/clock"
@@ -43,7 +45,7 @@
   direction: ROS_TO_GZ
 
 - ros_topic_name: "/tf"
-  gz_topic_name: "/model/robot_1/pose"
+  gz_topic_name: "/model/robot_1/tf"
   ros_type_name: "tf2_msgs/msg/TFMessage"
   gz_type_name: "gz.msgs.Pose_V"
   direction: GZ_TO_ROS
