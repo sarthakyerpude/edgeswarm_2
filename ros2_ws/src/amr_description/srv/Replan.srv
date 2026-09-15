@@ -1,0 +1,28 @@
+# =============================================================================
+# Replan.srv   ->  <robot_ns>/replan
+# =============================================================================
+# Ask THIS robot to recompute its own path, optionally avoiding extra cells.
+#
+# WHY A SERVICE AND NOT A TOPIC: a replan request needs an answer ("did you
+# find a path, and how long is it?"). That is request/response, which is what
+# services are for.
+#
+# WHY THIS IS NOT CENTRALISATION: the service lives on the robot and only ever
+# affects that robot. It is called by the robot's OWN deadlock handler, by the
+# experiment harness, or manually for testing. No robot calls another robot's
+# replan service - inter-robot coordination is broadcast-only.
+# =============================================================================
+
+bool    force              # true = replan even if the current path is valid
+int32[] avoid_rows         # extra cells to treat as blocked for this call
+int32[] avoid_cols
+float32 avoid_penalty      # added A* cost per avoided cell.
+                           # 0 or negative = treat as a hard obstacle.
+                           # A soft penalty (e.g. 50.0) is usually better: it
+                           # lets the planner still use the cell if there is
+                           # genuinely no alternative, instead of failing.
+---
+bool    success
+int32   path_length        # cells in the new path; 0 if none found
+float64 est_duration_s
+string  message            # diagnostic on failure
