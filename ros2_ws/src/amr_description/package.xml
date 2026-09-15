@@ -3,7 +3,7 @@
 <package format="3">
   <name>amr_description</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>SDF model of the lightweight AMR (amr_robot) used by warehouse_sim to spawn robots.</description>
   <maintainer email="sarth010622@todo.todo">sarth010622</maintainer>
   <license>TODO: License declaration</license>
 
