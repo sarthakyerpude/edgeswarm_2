@@ -7,9 +7,16 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+
+# Install world files, robot-spawn/bridge launch files, and the ros_gz_bridge
+# config so `ros2 launch warehouse_sim single_amr.launch.py` can find them
+# via the installed share/ directory.
+install(DIRECTORY
+  worlds
+  config
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
