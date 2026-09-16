@@ -1,0 +1,66 @@
+# =============================================================================
+# fleet_params.yaml - defaults for every fleet_agent.
+#
+# Values that MUST be identical on every robot are marked [FLEET-WIDE].
+# Changing one of those on a single robot breaks determinism: two robots would
+# compute different priority scores from the same data and could both believe
+# they won a zone.
+#
+# Per-robot values (robot_id, start pose) come from the launch file instead.
+# =============================================================================
+
+/**:
+  ros__parameters:
+
+    # ---- identity (overridden per robot by the launch file) --------------
+    robot_id: "robot_1"
+
+    # ---- map -------------------------------------------------------------
+    # [FLEET-WIDE] every robot must load the SAME grid file.
+    grid_yaml: ""            # set by the launch file to the installed path
+    map_frame: "map"
+
+    # ---- coordination ----------------------------------------------------
+    # "proposed" = the full distributed system
+    # "baseline" = stop-and-wait, for the performance comparison.
+    # Same sensing, same planning, same control - ONLY this changes. Changing
+    # exactly one variable is what makes the comparison valid.
+    coordination_mode: "proposed"
+
+    tick_rate_hz: 10.0          # coordination decisions per second
+    state_rate_hz: 10.0         # [FLEET-WIDE] heartbeat rate; peers' dead
+                                # timeout (1.5 s) is derived from this
+    intent_keepalive_hz: 1.0
+
+    # ---- motion ----------------------------------------------------------
+    v_nominal: 0.4              # m/s. MUST match the real robot's cruise
+                                # speed or every ETA in every Intent is wrong
+    pose_source: "odom"         # odom only in this coordination package
+
+    # ---- actuator ownership ----------------------------------------------
+    # false  : we publish motion_permit only; amr_navigation owns cmd_vel.
+    #          THIS IS THE DEFAULT and it is the safe one.
+    # true   : we subscribe cmd_vel_raw and publish the gated cmd_vel.
+    #          Only enable this after agreeing the remap with the nav team.
+    enable_cmd_vel_gate: false
+
+    # ---- obstacle reporting ---------------------------------------------
+    enable_obstacle_reporting: true
+    obstacle_persist_scans: 5   # consecutive scans before declaring a cell
+                                # blocked. Stops a passing worker permanently
+                                # poisoning the map; still catches a dropped
+                                # pallet within ~0.5 s at 10 Hz.
+    obstacle_expiry_s: 20.0     # MANDATORY. Without expiry a parked forklift
+                                # blocks an aisle for the rest of the run.
+
+    # ---- battery (simple model; replace with a real ADC on hardware) ------
+    battery_initial_pct: 100.0
+    battery_per_metre_pct: 0.35
+
+    # ---- executor --------------------------------------------------------
+    # NOT cpu_count(). Three robot processes x 4 threads on a 4-core machine,
+    # alongside Gazebo, causes context-switch thrash and jittery control.
+    executor_threads: 3
+
+    # ---- goal (optional; normally set by winning a task) -----------------
+    goal_cell: [-1, -1]

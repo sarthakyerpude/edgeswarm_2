@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Cyclone DDS configuration - SINGLE MACHINE (all robots on one PC).
+
+  Usage:
+      export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      export CYCLONEDDS_URI=file://$(ros2 pkg prefix amr_description)/share/amr_description/config/cyclonedds_local.xml
+
+  Schema note: this uses the MODERN <Interfaces><NetworkInterface .../> form.
+  Older ROS 2 Humble examples use <NetworkInterfaceAddress>, which is
+  deprecated. Do not copy the old syntax into a Jazzy setup.
+-->
+<CycloneDDS xmlns="https://cdds.io/config"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+  <Domain Id="any">
+    <General>
+      <!-- Loopback only: everything is on this machine. -->
+      <Interfaces>
+        <NetworkInterface name="lo" priority="default" multicast="true"/>
+      </Interfaces>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
+
+    <Internal>
+      <!-- Modest buffers. This is a 4 GB development machine, not a server. -->
+      <Watermarks>
+        <WhcHigh>200kB</WhcHigh>
+      </Watermarks>
+    </Internal>
+
+    <Tracing>
+      <!-- Raise to "config" or "finest" ONLY while debugging discovery.
+           "finest" produces enormous logs. -->
+      <Verbosity>warning</Verbosity>
+      <OutputFile>stdout</OutputFile>
+    </Tracing>
+  </Domain>
+</CycloneDDS>

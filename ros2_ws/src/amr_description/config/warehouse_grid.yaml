@@ -1,0 +1,145 @@
+# =============================================================================
+# warehouse_grid.yaml - the coordination layer's view of the warehouse
+# =============================================================================
+#
+# !! ACTION REQUIRED BY THE TEAM BEFORE THE FIRST GAZEBO RUN !!
+#
+# This grid MUST describe the same warehouse as the Gazebo world owned by
+# warehouse_sim. Because this branch is not permitted to modify that package,
+# the two are kept aligned by hand. docs/GRID_ALIGNMENT.md gives a 5-minute
+# verification procedure - run it once, then never worry about it again.
+#
+# The values below are a PLACEHOLDER matching a 20m x 14m warehouse at 0.4 m
+# resolution. Replace the occupancy block with your real layout.
+#
+# CONVENTION (fixed in core/gridmap.py, do not change in one place only):
+#     grid ROW    -> world Y
+#     grid COLUMN -> world X
+#     world_x = (col + 0.5) * resolution + origin[0]
+#     world_y = (row + 0.5) * resolution + origin[1]
+# =============================================================================
+
+meta:
+  name: warehouse_v1
+  resolution: 0.4          # metres per cell
+  width_cells: 50          # columns -> X, so 50 * 0.4 = 20.0 m wide
+  height_cells: 35         # rows    -> Y, so 35 * 0.4 = 14.0 m deep
+  origin: [0.0, 0.0]       # world coords of grid cell (0,0) corner
+
+# '.' = free, '#' = static obstacle (rack or wall).
+# EVERY ROW MUST BE EXACTLY width_cells CHARACTERS. The loader raises a clear
+# error if not - a single short row silently shifts every coordinate to its
+# right and produces navigation bugs that look completely random.
+occupancy:
+  - "##################################################"   # 0   wall
+  - "#................................................#"   # 1 
+  - "#................................................#"   # 2   loading / charging row
+  - "#................................................#"   # 3   MAIN CORRIDOR
+  - "#................................................#"   # 4 
+  - "#..#########..#########..#########..##########...#"   # 5   RACK A
+  - "#..#########..#########..#########..##########...#"   # 6   RACK A
+  - "#................................................#"   # 7 
+  - "#................................................#"   # 8   aisle A1
+  - "#................................................#"   # 9 
+  - "#..#########..#########..#########..##########...#"   # 10  RACK B
+  - "#..#########..#########..#########..##########...#"   # 11  RACK B
+  - "#................................................#"   # 12
+  - "#................................................#"   # 13  aisle A2
+  - "#................................................#"   # 14
+  - "#..#########..#########..#########..##########...#"   # 15  RACK C
+  - "#..#########..#########..#########..##########...#"   # 16  RACK C
+  - "#................................................#"   # 17
+  - "#................................................#"   # 18  aisle A3
+  - "#................................................#"   # 19
+  - "#..#########..#########..#########..##########...#"   # 20  RACK D
+  - "#..#########..#########..#########..##########...#"   # 21  RACK D
+  - "#................................................#"   # 22
+  - "#................................................#"   # 23
+  - "#................................................#"   # 24  SOUTH CORRIDOR
+  - "#................................................#"   # 25
+  - "#................................................#"   # 26
+  - "#................................................#"   # 27
+  - "#................................................#"   # 28
+  - "#................................................#"   # 29
+  - "#................................................#"   # 30
+  - "#................................................#"   # 31  packing row
+  - "#................................................#"   # 32
+  - "#................................................#"   # 33
+  - "##################################################"   # 34  wall
+
+# -----------------------------------------------------------------------------
+# ZONES - named capacity-1 shared resources.
+#
+# This is where decentralised coordination actually bites. Two robots can hold
+# different cells simultaneously, but only ONE can hold a zone.
+#
+# 'rect' is [row_min, col_min, row_max, col_max], inclusive.
+# Use 'cells: [[r,c],[r,c]]' instead when the shape is irregular.
+#
+# WHY AISLES ARE ONE ZONE, NOT A LIST OF CELLS:
+# if two robots each reserved half an aisle from opposite ends they would meet
+# in the middle and neither could cheaply back out. Reserving the WHOLE segment
+# makes head-on deadlock inside an aisle structurally impossible.
+# -----------------------------------------------------------------------------
+zones:
+  # Intersections sit where a north-south cross-corridor (free columns 12-13,
+  # 23-24, 34-35) meets an east-west aisle. Verified against the occupancy
+  # block above by test/test_grid_config.py - that test FAILS if a zone ever
+  # overlaps a rack, which would make the zone permanently unenterable.
+  inter_X1:
+    type: intersection
+    rect: [7, 12, 9, 13]
+    capacity: 1
+
+  inter_X2:
+    type: intersection
+    rect: [7, 23, 9, 24]
+    capacity: 1
+
+  inter_X3:
+    type: intersection
+    rect: [12, 12, 14, 13]
+    capacity: 1
+
+  inter_X4:
+    type: intersection
+    rect: [12, 23, 14, 24]
+    capacity: 1
+
+  # Aisles are ONE zone each, not a list of cells. Two robots can never each
+  # own half of an aisle, so head-on deadlock inside one is impossible.
+  aisle_A1:
+    type: single_lane
+    rect: [8, 3, 8, 45]
+    capacity: 1
+
+  aisle_A2:
+    type: single_lane
+    rect: [13, 3, 13, 45]
+    capacity: 1
+
+  aisle_A3:
+    type: single_lane
+    rect: [18, 3, 18, 45]
+    capacity: 1
+
+  choke_CP1:
+    type: choke
+    rect: [22, 1, 24, 2]
+    capacity: 1
+
+# -----------------------------------------------------------------------------
+# STATIONS - named cells used by the task generator and for goals.
+# -----------------------------------------------------------------------------
+stations:
+  # All on free rows (1-4 and 25-33 are entirely open). Reachability is
+  # asserted by test/test_grid_config.py.
+  L1:   {cell: [2, 30], type: loading}
+  L2:   {cell: [2, 35], type: loading}
+  L3:   {cell: [2, 40], type: loading}
+  P1:   {cell: [31, 5],  type: packing}
+  P2:   {cell: [31, 10], type: packing}
+  P3:   {cell: [31, 15], type: packing}
+  CHG1: {cell: [2, 5],  type: charging}
+  CHG2: {cell: [2, 10], type: charging}
+  CHG3: {cell: [2, 15], type: charging}

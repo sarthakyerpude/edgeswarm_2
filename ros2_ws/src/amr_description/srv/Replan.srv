@@ -1,5 +1,6 @@
+# =============================================================================
 # Replan.srv   ->  <robot_ns>/replan
-
+# =============================================================================
 # Ask THIS robot to recompute its own path, optionally avoiding extra cells.
 #
 # WHY A SERVICE AND NOT A TOPIC: a replan request needs an answer ("did you
@@ -10,6 +11,7 @@
 # affects that robot. It is called by the robot's OWN deadlock handler, by the
 # experiment harness, or manually for testing. No robot calls another robot's
 # replan service - inter-robot coordination is broadcast-only.
+# =============================================================================
 
 bool    force              # true = replan even if the current path is valid
 int32[] avoid_rows         # extra cells to treat as blocked for this call
