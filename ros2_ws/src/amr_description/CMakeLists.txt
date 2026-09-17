@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 project(amr_description)
 
-# =============================================================================
 # This file EXTENDS the original `ros2 pkg create --build-type ament_cmake`
 # skeleton that was in the repo. Everything the skeleton had is preserved:
 #   - cmake_minimum_required 3.8          (unchanged)
@@ -12,14 +11,14 @@ project(amr_description)
 #   - ament_package()                     (unchanged, still last)
 #
 # Added below: interface generation, the amr_fleet Python package, the
-# executable entry points, and the launch/config installs. The Python package
-# is installed with plain CMake because current ament_cmake_python documentation
-# warns against combining ament_python_install_package() with rosidl generation
-# in the same project.
+# executable entry points, and the launch/config/models installs. The Python
+# package is installed with plain CMake because current ament_cmake_python
+# documentation warns against combining ament_python_install_package() with
+# rosidl generation in the same project.
 #
-# The commented-out urdf/meshes install block near the bottom is ready for the
-# robot-model work; uncomment it when those directories exist.
-# =============================================================================
+# The models/ install near the bottom was added once the robot SDF model
+# landed (see that block's own comment).
+
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -74,26 +73,26 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# ------------------------------------------------------ data files ----------
+# data files
 install(DIRECTORY
   launch
   config
   DESTINATION share/${PROJECT_NAME}
 )
 
-# --- ROBOT MODEL (not yet present in the repo) -------------------------------
-# amr_description currently contains no urdf/ or meshes/ directory. When the
-# robot-model work lands, uncomment this. Leaving it commented avoids a
-# configure-time error on a directory that does not exist.
-#
-# install(DIRECTORY
-#   urdf
-#   meshes
-#   rviz
-#   DESTINATION share/${PROJECT_NAME}
-# )
+# ROBOT MODEL
+# Landed as an SDF model (not urdf/meshes as this block originally
+# anticipated - amr_robot is basic-shape SDF, no separate mesh files, so
+# there is no urdf/, meshes/, or rviz/ directory).
+# Without this, colcon installs everything else in this file but the robot
+# SDF itself is absent from the install space, and warehouse_sim's spawn
+# node (which reads it from amr_description's share/ directory) fails.
+install(DIRECTORY
+  models
+  DESTINATION share/${PROJECT_NAME}
+)
 
-# ------------------------------------------------------ testing -------------
+# testing
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
