@@ -9,14 +9,8 @@
 -->
 <package format="3">
   <name>amr_description</name>
-  <version>0.1.0</version>
-  <description>
-    AMR robot description and decentralised fleet coordination for EdgeSwarm.
-    Provides custom fleet interfaces, a per-robot coordination agent
-    (conflict detection, deterministic priority, zone mutual exclusion,
-    wait-for-graph deadlock resolution, map sharing, auctioneer-free task
-    allocation) and Gazebo-free test fixtures. No central fleet server.
-  </description>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
   <maintainer email="sarth010622@todo.todo">sarth010622</maintainer>
   <license>MIT</license>
 

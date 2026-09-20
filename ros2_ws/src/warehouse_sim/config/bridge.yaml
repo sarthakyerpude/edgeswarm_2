@@ -1,12 +1,15 @@
-# bridge.yaml - ros_gz_bridge parameter_bridge config for single_amr.launch.py
+# bridge.yaml - ros_gz_bridge parameter_bridge config for three_amr.launch.py
+# (also used, subset only needed, by single_amr.launch.py)
 #
-# Gazebo Harmonic (gz-sim) <-> ROS 2 Jazzy, one robot named "robot_1".
+# Gazebo Harmonic (gz-sim) <-> ROS 2 Jazzy, three robots: robot_1, robot_2,
+# robot_3, spawned at spawn_1/spawn_2/spawn_3 in warehouse.sdf.
 #
 # Topic naming follows amr_description's docs/GAZEBO_INTEGRATION.md exactly,
 # so the coordination layer on the ankit/ros2-dds branch can consume these
 # without any changes on its side:
-#   /robot_1/odom, /robot_1/scan, /clock  (Gazebo -> ROS)
-#   /robot_1/cmd_vel                      (ROS -> Gazebo)
+#   /robot_N/odom, /robot_N/scan  (Gazebo -> ROS)
+#   /robot_N/cmd_vel              (ROS -> Gazebo)
+#   /clock                        (Gazebo -> ROS, shared across all robots)
 #
 # /tf is included per this task's spec even though amr_description's docs
 # say the coordination layer doesn't need it (it works in the map frame) -
@@ -14,11 +17,6 @@
 # Source: DiffDrive's own built-in tf publisher (/model/<name>/tf), which
 # uses the same wheel-encoder odometry as /model/<name>/odometry and fills
 # in frame_id/child_frame_id - not a separate PosePublisher plugin.
-#
-# To extend to robot_2 / robot_3 for a future three-robot launch file, copy
-# each block below and swap "robot_1" for the new robot name - the gz side
-# topic names update automatically because the model is spawned with that
-# name (see amr_description/models/amr_robot/model.sdf).
 
 - ros_topic_name: "/clock"
   gz_topic_name: "/clock"
@@ -26,6 +24,7 @@
   gz_type_name: "gz.msgs.Clock"
   direction: GZ_TO_ROS
 
+# robot_1
 - ros_topic_name: "/robot_1/odom"
   gz_topic_name: "/model/robot_1/odometry"
   ros_type_name: "nav_msgs/msg/Odometry"
@@ -46,6 +45,56 @@
 
 - ros_topic_name: "/tf"
   gz_topic_name: "/model/robot_1/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+# robot_2 
+- ros_topic_name: "/robot_2/odom"
+  gz_topic_name: "/model/robot_2/odometry"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot_2/scan"
+  gz_topic_name: "/world/warehouse/model/robot_2/link/laser_link/sensor/lidar/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot_2/cmd_vel"
+  gz_topic_name: "/model/robot_2/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/tf"
+  gz_topic_name: "/model/robot_2/tf"
+  ros_type_name: "tf2_msgs/msg/TFMessage"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS
+
+# robot_3
+- ros_topic_name: "/robot_3/odom"
+  gz_topic_name: "/model/robot_3/odometry"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot_3/scan"
+  gz_topic_name: "/world/warehouse/model/robot_3/link/laser_link/sensor/lidar/scan"
+  ros_type_name: "sensor_msgs/msg/LaserScan"
+  gz_type_name: "gz.msgs.LaserScan"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/robot_3/cmd_vel"
+  gz_topic_name: "/model/robot_3/cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/tf"
+  gz_topic_name: "/model/robot_3/tf"
   ros_type_name: "tf2_msgs/msg/TFMessage"
   gz_type_name: "gz.msgs.Pose_V"
   direction: GZ_TO_ROS
