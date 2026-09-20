@@ -417,6 +417,7 @@ class FleetAgentNode(Node):
             return
         if self.coord.state.status == FAULT and (now - self._last_odom_t) < 0.5:
             self.coord.state.status = IDLE       # recovered
+            self.coord.state.alive = True
 
         self._update_battery()
         self._advance_task_lifecycle(now)

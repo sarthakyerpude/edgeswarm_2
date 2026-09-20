@@ -65,7 +65,7 @@ ros2 launch amr_description single_robot_test.launch.py
 
 Expect within 2 s:
 ```
-[fleet_agent]: grid 50x35 res=0.4m zones=['inter_X1', ...]
+[fleet_agent]: grid 120x100 res=0.1m zones=['inter_X1', ...]
 [fleet_agent]: fleet_agent up: robot_id=robot_1 mode=proposed tick=10.0Hz ns=/robot_1 domain=42 rmw=rmw_cyclonedds_cpp
 [mock_robot]: mock_robot robot_1 at (1.00,1.00) [NO GAZEBO - test fixture]
 [fleet_monitor]: FLEET MONITOR (1 robots seen)

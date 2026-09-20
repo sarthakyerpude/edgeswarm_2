@@ -12,7 +12,7 @@ the navigation team wants it, a suggested path on <ns>/coordination_path.
 Keeping these separate means this package never fights Nav2 for the actuator.
 
 WHY PLAIN A* AND NOT D* LITE
-On a grid of this size (roughly 1100 free cells) A* expands 150-400 nodes,
+On the aligned 12m x 10m grid at 0.1m resolution, A* operates over roughly 8k free cells;
 which is about 2-6 ms on a laptop and 4-8 ms on a Jetson Nano. Replans happen a
 few times per minute. D* Lite's incremental advantage only pays off on much
 larger maps replanned at high rate, and it costs ~250 lines of subtle code.
