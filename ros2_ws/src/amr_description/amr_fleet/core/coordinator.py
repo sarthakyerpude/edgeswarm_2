@@ -349,22 +349,56 @@ class FleetCoordinator:
                       deadlock_detected=True, deadlock_cycle=cycle)
 
     # ----------------------------------------------------------------- zones
+    def _path_index_near_current(self) -> int:
+        """Return the path index nearest to the robot's current grid cell."""
+        if not self.path:
+            return 0
+        cur = self.grid.world_to_cell(self.state.pose.x, self.state.pose.y)
+        return min(range(len(self.path)),
+                   key=lambda i: (self.path[i][0] - cur[0]) ** 2
+                                 + (self.path[i][1] - cur[1]) ** 2)
+
+    def _zone_path_indices(self, zone_id: str) -> List[int]:
+        zone = self.grid.zones.get(zone_id)
+        if zone is None:
+            return []
+        return [i for i, cell in enumerate(self.path) if cell in zone.cells]
+
     def _next_zone(self) -> Optional[str]:
+        """Return the next zone still ahead of or containing the robot.
+
+        ``Intent.zones`` is the complete route's zone list. It is not enough
+        to return its first element forever: once the robot has physically
+        passed that zone, it must be released and the next zone considered.
+        """
+        if not self.path:
+            return None
+        cur_i = self._path_index_near_current()
+        candidates = []
         for zid in self.intent.zones:
-            if self.arbiter.state.get(zid) != "FREE" or True:
-                return zid
-        return None
+            indices = self._zone_path_indices(zid)
+            if not indices:
+                continue
+            future = [i for i in indices if i >= cur_i]
+            if future:
+                candidates.append((future[0], zid))
+        return min(candidates)[1] if candidates else None
 
     def _distance_to_zone_m(self, zone_id: str) -> float:
+        """Distance from the current robot position along the active path to a zone."""
         zone = self.grid.zones.get(zone_id)
         if zone is None or not self.path:
             return 1e9
-        travelled = 0.0
-        prev = self.path[0]
-        for cell in self.path:
-            travelled += self.grid.cell_distance_m(prev, cell)
-            prev = cell
-            if cell in zone.cells:
+
+        cur_i = self._path_index_near_current()
+        cur_cell = self.grid.world_to_cell(self.state.pose.x, self.state.pose.y)
+        travelled = self.grid.cell_distance_m(cur_cell, self.path[cur_i])
+        if self.path[cur_i] in zone.cells:
+            return 0.0
+
+        for i in range(cur_i + 1, len(self.path)):
+            travelled += self.grid.cell_distance_m(self.path[i - 1], self.path[i])
+            if self.path[i] in zone.cells:
                 return travelled
         return 1e9
 
@@ -396,10 +430,18 @@ class FleetCoordinator:
         return best_id, best_t
 
     def _maybe_release_passed_zones(self) -> None:
-        cur = self.grid.world_to_cell(self.state.pose.x, self.state.pose.y)
+        """Release zones whose final path cell is behind the robot.
+
+        A held zone must not remain locked after traversal. Checking only
+        ``zid not in intent.zones`` is wrong because the intent intentionally
+        contains the zone for the whole route.
+        """
+        if not self.path:
+            return
+        cur_i = self._path_index_near_current()
         for zid in self.arbiter.held_zones():
-            zone = self.grid.zones.get(zid)
-            if zone and cur not in zone.cells and zid not in self.intent.zones:
+            indices = self._zone_path_indices(zid)
+            if indices and cur_i > max(indices):
                 self.arbiter.release(zid)
 
     # --------------------------------------------------------------- metrics

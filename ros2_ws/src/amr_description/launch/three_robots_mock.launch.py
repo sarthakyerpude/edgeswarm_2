@@ -26,9 +26,10 @@ from launch_ros.substitutions import FindPackageShare
 
 # start cells are (row, col); mock_robot converts via the same grid convention
 ROBOTS = [
-    {"id": "robot_1", "x": "1.0", "y": "1.0"},
-    {"id": "robot_2", "x": "8.2", "y": "3.4"},
-    {"id": "robot_3", "x": "16.2", "y": "3.4"},
+    # Match the Gazebo team's world spawn poses.
+    {"id": "robot_1", "x": "-3.0", "y": "-4.0", "theta": "1.5708"},
+    {"id": "robot_2", "x": "0.0", "y": "-4.0", "theta": "1.5708"},
+    {"id": "robot_3", "x": "3.0", "y": "-4.0", "theta": "1.5708"},
 ]
 
 
@@ -55,6 +56,7 @@ def generate_launch_description():
                 "robot_id": r["id"],
                 "start_x": float(r["x"]),
                 "start_y": float(r["y"]),
+                "start_theta": float(r["theta"]),
                 # NOTE use_sim_time FALSE here: there is no Gazebo and nothing
                 # publishes /clock, so nodes must use the wall clock. Setting
                 # it true with no /clock publisher makes every timer stall at

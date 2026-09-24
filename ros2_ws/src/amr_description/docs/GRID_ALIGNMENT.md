@@ -31,10 +31,10 @@ need the floor size in metres and which corner is the world origin.
 **2. Set `meta` to match.**
 ```yaml
 meta:
-  resolution: 0.4          # pick so robot radius (0.16 m) fits a cell
-  width_cells: 50          # width_cells * resolution == world width in X
-  height_cells: 35         # height_cells * resolution == world depth in Y
-  origin: [0.0, 0.0]       # world coords of grid cell (0,0)'s corner
+  resolution: 0.1          # 10 cm cells; aligns the supplied markers to cell centers
+  width_cells: 120         # 120 * 0.1 = 12.0 m
+  height_cells: 100        # 100 * 0.1 = 10.0 m
+  origin: [-6.0, -5.0]     # world coords of grid cell (0,0)'s corner
 ```
 
 **3. Verify with two robots and one command.** Start the simulation and drive
@@ -64,34 +64,37 @@ mutually reachable. It caught two real bugs while this package was written.
 
 ## Drawing the occupancy block
 
-`'#'` = static obstacle (rack or wall), `'.'` = free.
+`'#'` = static obstacle (rack or wall), `'.'` = free. Every row is exactly
+`width_cells` characters. The current file is generated from the Gazebo team's
+world-coordinate rectangles:
 
-**Every row must be exactly `width_cells` characters.** The loader raises a
-clear error if not, because a single short row silently shifts every coordinate
-to its right.
+- outer world: `x=-6..+6`, `y=-5..+5`
+- west racks: `x=-5.7..-1.0`
+- east racks: `x=+1.0..+5.7`
+- rack row 1: `y=3.2..3.8`
+- rack row 2: `y=1.1..1.7`
+- rack row 3: `y=-0.4..0.2`
+- crossing corridor: `x=-1.0..+1.0`
 
-Generating it with a short script beats typing it:
+The 0.1 m resolution was chosen because it maps the supplied markers exactly to
+cell centers with the fixed center-coordinate convention. For example:
 
-```python
-W, H = 50, 35
-RACK_ROWS = [(5,6), (10,11), (15,16), (20,21)]
-RACKS = [(3,9), (14,9), (25,9), (36,10)]   # (start_col, length)
+```text
+world point                  grid cell
+(-3.35,  3.95) pickup 1   -> (89, 26)
+( 3.35,  3.95) pickup 2   -> (89, 93)
+(-3.35,  2.45) pickup 3   -> (74, 26)
+(-3.00, -2.80) dropoff 1  -> (22, 30)
+( 0.00, -2.80) dropoff 2  -> (22, 60)
+( 3.00, -2.80) dropoff 3  -> (22, 90)
+```
 
-rows = []
-for r in range(H):
-    if r in (0, H-1):
-        rows.append('#'*W); continue
-    line = ['.']*W
-    line[0] = line[W-1] = '#'
-    if any(a <= r <= b for a, b in RACK_ROWS):
-        for start, length in RACKS:
-            for c in range(start, start+length):
-                if 0 < c < W-1:
-                    line[c] = '#'
-    rows.append(''.join(line))
+The mock three-robot launch uses the same spawn positions as Gazebo:
 
-for i, row in enumerate(rows):
-    print(f'  - "{row}"   # {i}')
+```text
+robot_1: (-3.0, -4.0), yaw +1.5708
+robot_2: ( 0.0, -4.0), yaw +1.5708
+robot_3: ( 3.0, -4.0), yaw +1.5708
 ```
 
 ## Defining zones
@@ -103,12 +106,17 @@ cannot pass each other.
 zones:
   inter_X1:
     type: intersection
-    rect: [7, 12, 9, 13]     # [row_min, col_min, row_max, col_max] inclusive
+    rect: [67, 50, 81, 69]   # x=-1..+1, y=1.7..3.2
+    capacity: 1
+
+  aisle_A1:
+    type: single_lane
+    rect: [67, 3, 81, 116]  # normal aisle y=1.7..3.2
     capacity: 1
 
   aisle_A2:
     type: single_lane
-    rect: [13, 3, 13, 45]    # the WHOLE aisle as ONE zone
+    rect: [52, 3, 60, 116]  # narrow aisle y=0.2..1.1
     capacity: 1
 ```
 

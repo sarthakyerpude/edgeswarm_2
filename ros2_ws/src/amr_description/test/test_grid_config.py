@@ -68,7 +68,7 @@ def test_astar_forbids_corner_cutting():
     """A diagonal step must never slip between two blocked cells, or the real
     robot clips a rack corner."""
     gm = load()
-    path = astar(gm, (2, 2), gm.stations["P3"])
+    path = astar(gm, (10, 10), gm.stations["P3"])
     assert path
     for (r1, c1), (r2, c2) in zip(path, path[1:]):
         if r1 != r2 and c1 != c2:                 # diagonal step

@@ -27,8 +27,8 @@ def generate_launch_description():
         Node(package="amr_description", executable="mock_robot",
              name="mock_robot", namespace=rid, output="screen",
              emulate_tty=True,
-             parameters=[{"robot_id": rid, "start_x": 1.0, "start_y": 1.0,
-                          "use_sim_time": False}]),
+             parameters=[{"robot_id": rid, "start_x": -3.0, "start_y": -4.0,
+                          "start_theta": 1.5708, "use_sim_time": False}]),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution([

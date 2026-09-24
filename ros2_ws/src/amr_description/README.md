@@ -130,9 +130,10 @@ for `granted=true` from every peer that wants the same zone.
 
 ## Before the first Gazebo run: align the grid
 
-`config/warehouse_grid.yaml` is a **placeholder** 20 m × 14 m warehouse. It must
-describe the same building as the Gazebo world. Since this branch cannot modify
-`warehouse_sim`, the two are aligned by hand — a one-time 5-minute task.
+`config/warehouse_grid.yaml` is aligned to the Gazebo team's **12 m × 10 m** warehouse centered at world `(0,0)`. The grid uses 0.1 m
+cells with origin `[-6.0, -5.0]`, matching the supplied rack, aisle,
+intersection, pickup, drop-off, and robot spawn geometry. Since this branch cannot
+modify `warehouse_sim`, the Gazebo geometry remains the source of truth.
 
 Convention: **grid row → world Y, grid column → world X.** Transposing this is
 the most common source of "the robot drives into a rack", and it shows up far
