@@ -214,3 +214,37 @@ def test_deferred_grant_uses_requesters_original_request_id():
     a.release("Z")
     assert sent[-1]["requester_id"] == "robot_2"
     assert sent[-1]["req_id"] == 7
+
+
+def test_zone_distance_is_measured_from_current_position_not_path_start():
+    from amr_fleet.core.coordinator import FleetCoordinator
+    from amr_fleet.core.gridmap import GridMap
+    from amr_fleet.core.models import Pose2D
+
+    grid = GridMap.from_yaml(str(pathlib.Path(__file__).resolve().parents[1] / "config" / "warehouse_grid.yaml"))
+    c = FleetCoordinator("robot_1", grid, lambda d: None, lambda d: None)
+    c.state.pose = Pose2D(*grid.cell_to_world((74, 45)), 0.0)
+    c.path = [(74, 45), (74, 46), (74, 47), (74, 48), (74, 49),
+              (74, 50), (74, 51), (74, 52), (74, 53), (74, 54)]
+    c.intent.zones = ["inter_X1"]
+
+    d1 = c._distance_to_zone_m("inter_X1")
+    c.state.pose = Pose2D(*grid.cell_to_world((74, 49)), 0.0)
+    d2 = c._distance_to_zone_m("inter_X1")
+    assert d2 < d1
+
+
+def test_passed_zone_is_released_even_while_still_in_intent():
+    from amr_fleet.core.coordinator import FleetCoordinator
+    from amr_fleet.core.gridmap import GridMap
+    from amr_fleet.core.models import Pose2D
+
+    grid = GridMap.from_yaml(str(pathlib.Path(__file__).resolve().parents[1] / "config" / "warehouse_grid.yaml"))
+    c = FleetCoordinator("robot_1", grid, lambda d: None, lambda d: None)
+    c.path = [(74, 49), (74, 50), (74, 51), (74, 52), (74, 53), (74, 54), (74, 55), (74, 56), (74, 57), (74, 58), (74, 59), (74, 60), (74, 61), (74, 62), (74, 63), (74, 64), (74, 65), (74, 66), (74, 67), (74, 68), (74, 69), (74, 70)]
+    c.intent.zones = ["inter_X1"]
+    c.state.pose = Pose2D(*grid.cell_to_world((74, 70)), 0.0)
+    c.arbiter.state["inter_X1"] = "HELD"
+
+    c._maybe_release_passed_zones()
+    assert c.arbiter.state["inter_X1"] == "FREE"
