@@ -3,11 +3,15 @@
 <package format="3">
   <name>warehouse_sim</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Gazebo Harmonic warehouse world, robot spawn launch files and the ros_gz_bridge config for the EdgeSwarm AMR fleet.</description>
   <maintainer email="sarth010622@todo.todo">sarth010622</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>amr_description</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
