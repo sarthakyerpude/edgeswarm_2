@@ -1,18 +1,15 @@
-# colcon / build artifacts
+# colcon / build artifacts (any level)
 build/
 install/
 log/
 __pycache__/
 *.pyc
+# legacy workspace dir kept on disk for old build artifacts only
+ros2_ws/
 # run/diagnostic output
 *.log
 *.csv
-# scratch at ros2_ws root
-ros2_ws/out.yaml
-ros2_ws/valid.yaml
-ros2_ws/test_yaml.py
-ros2_ws/fix_gpu.sh
-ros2_ws/cyclonedds.xml
 # docs live in the project wiki; only SETUP.md is kept in-repo
 *.md
 !SETUP.md
+!README.md

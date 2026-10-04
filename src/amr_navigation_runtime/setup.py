@@ -9,7 +9,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', [
-            'launch/navigation.launch.py', 'launch/ai_fleet_agent.launch.py',
+            'launch/navigation.launch.py',
             'launch/simulation_imu.launch.py', 'launch/three_amr.launch.py',
             'launch/sim_gazebo.launch.py', 'launch/sim_external.launch.py',
             'launch/sim_webots.launch.py']),
@@ -29,6 +29,5 @@ setup(
         'collision_recorder = amr_navigation_runtime.collision_recorder:main',
         'experiment_recorder = amr_navigation_runtime.experiment_recorder:main',
         'gazebo_tf_relay = amr_navigation_runtime.tf_relay:main',
-        'ai_fleet_agent = amr_navigation_runtime.ai_fleet_agent:main',
     ]},
 )

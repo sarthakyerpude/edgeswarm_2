@@ -1,10 +1,21 @@
 # EdgeSwarm — Setup & Run Guide
 
 Three-robot decentralized AMR warehouse fleet: ROS 2 Jazzy + Nav2 + P2P fleet
-coordination, with a **switchable simulator backend** (Gazebo Harmonic by
-default). Workspace: `edgeswarm_2/ros2_ws`.
+coordination, with a **switchable simulator backend** (Webots recommended,
+Gazebo Harmonic supported). Workspace: `edgeswarm_2`.
 
 ---
+
+## 0. Fast path
+
+```bash
+./setup.sh   # once
+./run.sh     # Webots + Nav2 + fleet + web UI on http://localhost:8080
+```
+
+`setup.sh` installs the apt dependencies, builds the workspace and prints the
+Windows-side steps (Webots install, firewall rule, .wslconfig). The sections
+below cover the same ground in detail.
 
 ## 1. Prerequisites
 
@@ -20,7 +31,7 @@ sudo apt install ros-jazzy-ros-gz ros-jazzy-navigation2 ros-jazzy-nav2-bringup \
 ## 2. Build
 
 ```bash
-cd /mnt/c/Users/sarth/Desktop/SIH/edgeswarm_3/edgeswarm_3/edgeswarm_2/ros2_ws
+cd /mnt/c/Users/sarth/Desktop/SIH/edgeswarm_3/edgeswarm_3/edgeswarm_2
 source /opt/ros/jazzy/setup.bash
 colcon build
 source install/setup.bash
@@ -149,7 +160,7 @@ Robots move only after their Nav2 stacks are up (≥ 65 s) and tasks flow (≥ 8
 ## 6. Tests (no ROS or simulator needed)
 
 ```bash
-cd edgeswarm_2/ros2_ws/src/amr_description
+cd edgeswarm_2/src/amr_description
 python3 -m pytest test/            # 62 tests; architecture test enforces the sim-free core
 ```
 
@@ -181,5 +192,5 @@ pkill -9 -f "ros[-]args"; pkill -9 -f "g[z] sim"
 
 ## 9. More documentation
 
-- Topic/bridge contract: `edgeswarm_2/ros2_ws/src/amr_description/docs/` (TOPICS.md, GAZEBO_INTEGRATION.md, TEST_PLAN.md, EVALUATION.md)
+- Topic/bridge contract: `edgeswarm_2/src/amr_description/docs/` (TOPICS.md, GAZEBO_INTEGRATION.md, TEST_PLAN.md, EVALUATION.md)
 - Project wiki: `SIH/wiki/` — run guide, debug session notes, and the Isaac Sim migration plan (`Migration-Gazebo-to-IsaacSim.md`)

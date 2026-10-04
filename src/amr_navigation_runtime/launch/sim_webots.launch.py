@@ -127,7 +127,7 @@ def generate_launch_description():
         'resource', 'cyclonedds.xml')
 
     return LaunchDescription([
-        # The project's DDS setup (see ros2_ws/cyclonedds.xml + run guide):
+        # The project's DDS setup (see webots_warehouse_sim/resource/cyclonedds.xml + SETUP.md):
         # Fast DDS under WSL hit shared-memory failures and multi-minute
         # service discovery with this ~40-node graph; Cyclone with a raised
         # participant index is what the Gazebo stack always ran on.

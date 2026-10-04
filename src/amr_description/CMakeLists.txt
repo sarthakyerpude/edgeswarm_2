@@ -79,7 +79,6 @@ install(PROGRAMS
   scripts/rack_labels
   scripts/hitbox_markers
   scripts/gen_rack_slots.py
-  scripts/evaluate_benchmarks.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
