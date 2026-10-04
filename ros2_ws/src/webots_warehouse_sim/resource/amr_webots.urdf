@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- webots_ros2_driver controller description for one EdgeSwarm AMR.
+     Shared by all three robots: topics are relative, and the driver node plus
+     the AmrDriver plugin run under the per-robot namespace set by
+     WebotsController(namespace=...) / the Webots robot name.
+     Ros2Lidar publishes <ns>/scan with frame laser_link (must match the TF tree
+     from robot_state_publisher's amr.urdf.xacro). -->
+<robot name="edgeswarm_amr">
+  <webots>
+    <!-- Ros2Lidar publishes Webots' native CLOCKWISE scan on scan_raw; the
+         scan_flip relay node reverses it onto <ns>/scan in standard CCW
+         order. (Reading the lidar buffer natively inside AmrDriver
+         segfaulted over the TCP extern-controller link.) -->
+    <device reference="lidar_f" type="Lidar">
+      <ros><topicName>scan_f_raw</topicName><frameName>laser_link</frameName>
+        <updateRate>10</updateRate><enabled>true</enabled><alwaysOn>true</alwaysOn></ros>
+    </device>
+    <plugin type="webots_warehouse_sim.amr_driver.AmrDriver"/>
+  </webots>
+</robot>

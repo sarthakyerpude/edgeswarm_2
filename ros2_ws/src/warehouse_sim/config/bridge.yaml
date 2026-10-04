@@ -8,9 +8,8 @@
 #   /robot_1/odom, /robot_1/scan, /clock  (Gazebo -> ROS)
 #   /robot_1/cmd_vel                      (ROS -> Gazebo)
 #
-# /tf is included per this task's spec even though amr_description's docs
-# say the coordination layer doesn't need it (it works in the map frame) -
-# it's here for RViz / the nav stack / anything else that does need TF.
+# The robot's TF stays in /robot_1/tf so it cannot be mixed with another
+# model's transforms. It is consumed by RViz and the namespaced Nav2 stack.
 # Source: DiffDrive's own built-in tf publisher (/model/<name>/tf), which
 # uses the same wheel-encoder odometry as /model/<name>/odometry and fills
 # in frame_id/child_frame_id - not a separate PosePublisher plugin.
@@ -44,7 +43,7 @@
   gz_type_name: "gz.msgs.Twist"
   direction: ROS_TO_GZ
 
-- ros_topic_name: "/tf"
+- ros_topic_name: "/robot_1/tf"
   gz_topic_name: "/model/robot_1/tf"
   ros_type_name: "tf2_msgs/msg/TFMessage"
   gz_type_name: "gz.msgs.Pose_V"

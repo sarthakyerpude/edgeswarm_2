@@ -21,10 +21,14 @@ std_msgs/Header header
 # so it MUST be unique and MUST NOT change at runtime.
 string robot_id
 
-# Monotonic counter, incremented once per published message.
-# Peers detect packet loss by looking for gaps, and reject out-of-order
-# UDP delivery by discarding any message whose seq <= the last seen seq.
+# Monotonic uint32 counter, incremented once per published message. Peers
+# detect packet loss by looking for gaps and use serial-number arithmetic to
+# reject duplicate/out-of-order delivery. `boot_id` distinguishes restarts.
 uint32 seq
+
+# Random process epoch. A restarted agent gets a new value so peers can
+# distinguish its reset sequence counter from a delayed/out-of-order packet.
+uint64 boot_id
 
 # ---------------------------------------------------------------- pose ------
 # 2D pose in the map frame. We use Pose2D rather than PoseStamped because
@@ -75,3 +79,20 @@ float32 priority_score     # MY OWN computed score. Peers recompute it from the
 # be publishing while knowing its LiDAR has failed. Peers treat alive=false as
 # a static obstacle rather than a moving agent.
 bool alive
+
+# --------------------------------------------------------- intent sync ------
+# seq of my latest /fleet/intent. Bumped only when the plan (route or needed
+# zones) changes; keepalives re-send the same seq. A peer whose held intent
+# is older than this treats my plan as UNKNOWN (I may need any zone within
+# 3 m of my pose) until the new intent arrives.
+uint32 intent_seq
+
+# --------------------------------------------------- localization health ----
+# From the AMCL covariance health gate. Peers widen their stop distance by
+# 2 x loc_sigma_lat and use loc_health to choose single-lane vs two-lane.
+uint8 LOC_OK=0
+uint8 LOC_DEGRADED=1       # covariance over the gate, not yet declared lost
+uint8 LOC_LOST=2           # motion stopped until localization recovers
+uint8 loc_health
+float32 loc_sigma_lat      # 1-sigma pose error perpendicular to my heading, m
+                           # (0 when no covariance is available, e.g. odom)

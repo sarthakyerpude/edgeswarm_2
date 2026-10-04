@@ -1,0 +1,496 @@
+#VRML_SIM R2025a utf8
+# EdgeSwarm warehouse for Webots, mirroring warehouse_sim/worlds/warehouse.sdf:
+# interior 12 x 10 m centred on origin; walls N/S at y=+/-5.075, E/W at x=+/-6.075;
+# three rack rows (5.0 x 0.6 x 1.6 segments) at y 3.1 / 0.9 / -1.3, x=+/-3.3 each:
+# every aisle and the N-S spine is 1.6 m wide (R7 equal aisles, 2 robots abreast);
+# the 0.2 m rack-end gaps to the E/W walls are closed by wall_endcap_* solids.
+# Geometry must stay matched to nav's warehouse_map.pgm, or AMCL mislocalizes.
+#
+# The three robots are written INLINE (no EXTERNPROTO): webots_ros2 copies the
+# world to /tmp before launching, which breaks relative EXTERNPROTO paths.
+# Robot spec mirrors amr_robot_imu/model.sdf: chassis 0.40x0.32x0.12 @ 6 kg,
+# wheels r=0.05 at y=+/-0.19, low-friction caster sphere at x=0.15, lidar
+# (360 beams, 2*pi, 0.12-8.0 m) 0.20 m above ground. Device names consumed by
+# webots_warehouse_sim/amr_driver.py: wheel_{left,right}_motor/_sensor, lidar.
+
+WorldInfo {
+  basicTimeStep 16
+  optimalThreadCount 4
+  contactProperties [
+    ContactProperties {
+      material1 "wheel"
+      coulombFriction [ 1.0 ]
+    }
+    ContactProperties {
+      material1 "caster"
+      coulombFriction [ 0.01 ]
+    }
+  ]
+}
+Viewpoint {
+  orientation 0.25 0.43 -0.87 1.9
+  position 0 9 14
+}
+Background {
+  skyColor [ 0.7 0.7 0.7 ]
+}
+DirectionalLight {
+  direction -0.4 0.2 -0.9
+  intensity 2.5
+  castShadows TRUE
+}
+PointLight {
+  location 0 3 3.2
+  intensity 25
+  attenuation 0 0 1
+}
+PointLight {
+  location 0 -3 3.2
+  intensity 25
+  attenuation 0 0 1
+}
+
+# ---- floor -----------------------------------------------------------------
+Solid {
+  translation 0 0 -0.05
+  name "floor"
+  children [
+    Shape {
+      appearance PBRAppearance { baseColor 0.6 0.6 0.6 roughness 1 metalness 0 }
+      geometry DEF FLOOR_BOX Box { size 12.3 10.3 0.1 }
+    }
+  ]
+  boundingObject USE FLOOR_BOX
+}
+
+# ---- outer walls -----------------------------------------------------------
+Solid {
+  translation 0 5.075 1.25
+  name "wall_north"
+  children [
+    Shape {
+      appearance DEF WALL_APP PBRAppearance { baseColor 0.9 0.9 0.85 roughness 1 metalness 0 }
+      geometry DEF WALL_NS Box { size 12.3 0.15 2.5 }
+    }
+  ]
+  boundingObject USE WALL_NS
+}
+Solid {
+  translation 0 -5.075 1.25
+  name "wall_south"
+  children [ Shape { appearance USE WALL_APP geometry USE WALL_NS } ]
+  boundingObject USE WALL_NS
+}
+Solid {
+  translation 6.075 0 1.25
+  name "wall_east"
+  children [
+    Shape {
+      appearance USE WALL_APP
+      geometry DEF WALL_EW Box { size 0.15 10.3 2.5 }
+    }
+  ]
+  boundingObject USE WALL_EW
+}
+Solid {
+  translation -6.075 0 1.25
+  name "wall_west"
+  children [ Shape { appearance USE WALL_APP geometry USE WALL_EW } ]
+  boundingObject USE WALL_EW
+}
+
+# ---- rack rows (west/east segments, 1.6 m centre spine kept clear) ---------
+Solid {
+  translation -3.3 3.1 0.8
+  name "rack_row1_west"
+  children [
+    Shape {
+      appearance DEF RACK_APP PBRAppearance { baseColor 0.6 0.42 0.18 roughness 1 metalness 0 }
+      geometry DEF RACK_BOX Box { size 5.0 0.6 1.6 }
+    }
+  ]
+  boundingObject USE RACK_BOX
+}
+Solid {
+  translation 3.3 3.1 0.8
+  name "rack_row1_east"
+  children [ Shape { appearance USE RACK_APP geometry USE RACK_BOX } ]
+  boundingObject USE RACK_BOX
+}
+Solid {
+  translation -3.3 0.9 0.8
+  name "rack_row2_west"
+  children [ Shape { appearance USE RACK_APP geometry USE RACK_BOX } ]
+  boundingObject USE RACK_BOX
+}
+Solid {
+  translation 3.3 0.9 0.8
+  name "rack_row2_east"
+  children [ Shape { appearance USE RACK_APP geometry USE RACK_BOX } ]
+  boundingObject USE RACK_BOX
+}
+Solid {
+  translation -3.3 -1.3 0.8
+  name "rack_row3_west"
+  children [ Shape { appearance USE RACK_APP geometry USE RACK_BOX } ]
+  boundingObject USE RACK_BOX
+}
+Solid {
+  translation 3.3 -1.3 0.8
+  name "rack_row3_east"
+  children [ Shape { appearance USE RACK_APP geometry USE RACK_BOX } ]
+  boundingObject USE RACK_BOX
+}
+
+# ---- rack-end caps (R7): close the 0.2 m rack-to-side-wall gaps, x in
+#      [-6,-5.8] / [5.8,6], so no planner (fleet A*, Nav2) can route a robot
+#      through a gap it cannot fit. Named wall_* so the map tool rasterises them.
+Solid {
+  translation -5.9 3.1 0.8
+  name "wall_endcap_row1_west"
+  children [
+    Shape {
+      appearance USE WALL_APP
+      geometry DEF ENDCAP_BOX Box { size 0.2 0.6 1.6 }
+    }
+  ]
+  boundingObject USE ENDCAP_BOX
+}
+Solid {
+  translation 5.9 3.1 0.8
+  name "wall_endcap_row1_east"
+  children [ Shape { appearance USE WALL_APP geometry USE ENDCAP_BOX } ]
+  boundingObject USE ENDCAP_BOX
+}
+Solid {
+  translation -5.9 0.9 0.8
+  name "wall_endcap_row2_west"
+  children [ Shape { appearance USE WALL_APP geometry USE ENDCAP_BOX } ]
+  boundingObject USE ENDCAP_BOX
+}
+Solid {
+  translation 5.9 0.9 0.8
+  name "wall_endcap_row2_east"
+  children [ Shape { appearance USE WALL_APP geometry USE ENDCAP_BOX } ]
+  boundingObject USE ENDCAP_BOX
+}
+Solid {
+  translation -5.9 -1.3 0.8
+  name "wall_endcap_row3_west"
+  children [ Shape { appearance USE WALL_APP geometry USE ENDCAP_BOX } ]
+  boundingObject USE ENDCAP_BOX
+}
+Solid {
+  translation 5.9 -1.3 0.8
+  name "wall_endcap_row3_east"
+  children [ Shape { appearance USE WALL_APP geometry USE ENDCAP_BOX } ]
+  boundingObject USE ENDCAP_BOX
+}
+
+# ---- visual-only markers (no collision) ------------------------------------
+Pose {
+  translation 0 2.0 0.006
+  children [
+    Shape {
+      appearance PBRAppearance { baseColor 0.95 0.65 0.05 transparency 0.4 roughness 1 metalness 0 }
+      geometry Box { size 1.6 1.6 0.01 }
+    }
+  ]
+}
+Pose {
+  translation -3 -4 0.006
+  children [
+    DEF SPAWN_DISC Shape {
+      appearance PBRAppearance { baseColor 0.95 0.95 0.15 roughness 1 metalness 0 }
+      geometry Cylinder { radius 0.3 height 0.01 }
+    }
+  ]
+}
+Pose { translation 0 -4 0.006 children [ USE SPAWN_DISC ] }
+Pose { translation 3 -4 0.006 children [ USE SPAWN_DISC ] }
+Pose {
+  translation -3.45 3.85 0.006
+  children [
+    DEF PICKUP_DISC Shape {
+      appearance PBRAppearance { baseColor 0.15 0.9 0.25 roughness 1 metalness 0 }
+      geometry Cylinder { radius 0.25 height 0.01 }
+    }
+  ]
+}
+Pose { translation 3.45 3.85 0.006 children [ USE PICKUP_DISC ] }
+Pose { translation -3.45 2.45 0.006 children [ USE PICKUP_DISC ] }
+Pose {
+  translation -3 -2.8 0.006
+  children [
+    DEF DROPOFF_DISC Shape {
+      appearance PBRAppearance { baseColor 0.15 0.35 0.95 roughness 1 metalness 0 }
+      geometry Cylinder { radius 0.25 height 0.01 }
+    }
+  ]
+}
+Pose { translation 0 -2.8 0.006 children [ USE DROPOFF_DISC ] }
+Pose { translation 3 -2.8 0.006 children [ USE DROPOFF_DISC ] }
+
+# ---- movable box (pushable; teleport into an aisle to test replanning) -----
+Solid {
+  translation 5.3 -4.5 0.2
+  name "movable_box"
+  children [
+    Shape {
+      appearance PBRAppearance { baseColor 0.85 0.45 0.05 roughness 1 metalness 0 }
+      geometry DEF MOVABLE_BOX Box { size 0.4 0.4 0.4 }
+    }
+  ]
+  boundingObject USE MOVABLE_BOX
+  physics Physics { density -1 mass 5 }
+}
+
+# ---- robot_1 ----------------------------------------------------------------
+DEF ROBOT_1 Robot {
+  translation -3 -4 0.001
+  rotation 0 0 1 1.5708
+  name "robot_1"
+  controller "<extern>"
+  contactMaterial "caster"
+  children [
+    Pose {
+      translation 0 0 0.11
+      children [
+        DEF CHASSIS_SHAPE Shape {
+          appearance PBRAppearance { baseColor 0.15 0.45 0.9 roughness 0.6 metalness 0 }
+          geometry Box { size 0.4 0.32 0.12 }
+        }
+      ]
+    }
+    Pose {
+      translation 0.15 0 0.05
+      children [
+        DEF CASTER_SHAPE Shape {
+          appearance DEF DARK_APP PBRAppearance { baseColor 0.15 0.15 0.15 roughness 0.9 metalness 0 }
+          geometry Sphere { radius 0.05 subdivision 2 }
+        }
+      ]
+    }
+    Lidar {
+      translation 0 0 0.20
+      name "lidar_f"
+      horizontalResolution 360
+      fieldOfView 3.141593
+      numberOfLayers 1
+      minRange 0.12
+      maxRange 8.0
+      type "fixed"
+      children [
+        DEF LIDAR_SHAPE Shape {
+          appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.8 metalness 0 }
+          geometry Cylinder { radius 0.04 height 0.05 }
+        }
+      ]
+    }
+    Gyro { name "gyro" }
+    HingeJoint {
+      jointParameters HingeJointParameters { axis 0 1 0 anchor 0 0.19 0.05 }
+      device [
+        RotationalMotor { name "wheel_left_motor" maxVelocity 40 maxTorque 1.0 }
+        PositionSensor { name "wheel_left_sensor" }
+      ]
+      endPoint Solid {
+        translation 0 0.19 0.05
+        rotation 1 0 0 -1.5708
+        name "wheel_left"
+        contactMaterial "wheel"
+        children [
+          DEF WHEEL_SHAPE Shape {
+            appearance USE DARK_APP
+            geometry DEF WHEEL_CYL Cylinder { radius 0.05 height 0.03 }
+          }
+        ]
+        boundingObject USE WHEEL_CYL
+        physics DEF WHEEL_PHYSICS Physics { density -1 mass 0.3 }
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters { axis 0 1 0 anchor 0 -0.19 0.05 }
+      device [
+        RotationalMotor { name "wheel_right_motor" maxVelocity 40 maxTorque 1.0 }
+        PositionSensor { name "wheel_right_sensor" }
+      ]
+      endPoint Solid {
+        translation 0 -0.19 0.05
+        rotation 1 0 0 -1.5708
+        name "wheel_right"
+        contactMaterial "wheel"
+        children [ USE WHEEL_SHAPE ]
+        boundingObject USE WHEEL_CYL
+        physics USE WHEEL_PHYSICS
+      }
+    }
+  ]
+  boundingObject DEF CHASSIS_BO Group {
+    children [
+      Pose {
+        translation 0 0 0.11
+        children [ Box { size 0.4 0.32 0.12 } ]
+      }
+      Pose {
+        translation 0.15 0 0.05
+        children [ Sphere { radius 0.05 subdivision 2 } ]
+      }
+    ]
+  }
+  physics DEF CHASSIS_PHYSICS Physics {
+    density -1
+    mass 6.0
+    centerOfMass [ 0 0 0.11 ]
+  }
+}
+
+# ---- robot_2 ----------------------------------------------------------------
+DEF ROBOT_2 Robot {
+  translation 0 -4 0.001
+  rotation 0 0 1 1.5708
+  name "robot_2"
+  controller "<extern>"
+  contactMaterial "caster"
+  children [
+    Pose { translation 0 0 0.11 children [ USE CHASSIS_SHAPE ] }
+    Pose { translation 0.15 0 0.05 children [ USE CASTER_SHAPE ] }
+    Lidar {
+      translation 0 0 0.20
+      name "lidar_f"
+      horizontalResolution 360
+      fieldOfView 3.141593
+      numberOfLayers 1
+      minRange 0.12
+      maxRange 8.0
+      type "fixed"
+      children [ USE LIDAR_SHAPE ]
+    }
+    Gyro { name "gyro" }
+    HingeJoint {
+      jointParameters HingeJointParameters { axis 0 1 0 anchor 0 0.19 0.05 }
+      device [
+        RotationalMotor { name "wheel_left_motor" maxVelocity 40 maxTorque 1.0 }
+        PositionSensor { name "wheel_left_sensor" }
+      ]
+      endPoint Solid {
+        translation 0 0.19 0.05
+        rotation 1 0 0 -1.5708
+        name "wheel_left"
+        contactMaterial "wheel"
+        children [ USE WHEEL_SHAPE ]
+        boundingObject USE WHEEL_CYL
+        physics USE WHEEL_PHYSICS
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters { axis 0 1 0 anchor 0 -0.19 0.05 }
+      device [
+        RotationalMotor { name "wheel_right_motor" maxVelocity 40 maxTorque 1.0 }
+        PositionSensor { name "wheel_right_sensor" }
+      ]
+      endPoint Solid {
+        translation 0 -0.19 0.05
+        rotation 1 0 0 -1.5708
+        name "wheel_right"
+        contactMaterial "wheel"
+        children [ USE WHEEL_SHAPE ]
+        boundingObject USE WHEEL_CYL
+        physics USE WHEEL_PHYSICS
+      }
+    }
+  ]
+  boundingObject USE CHASSIS_BO
+  physics USE CHASSIS_PHYSICS
+}
+
+# ---- robot_3 ----------------------------------------------------------------
+DEF ROBOT_3 Robot {
+  translation 3 -4 0.001
+  rotation 0 0 1 1.5708
+  name "robot_3"
+  controller "<extern>"
+  contactMaterial "caster"
+  children [
+    Pose { translation 0 0 0.11 children [ USE CHASSIS_SHAPE ] }
+    Pose { translation 0.15 0 0.05 children [ USE CASTER_SHAPE ] }
+    Lidar {
+      translation 0 0 0.20
+      name "lidar_f"
+      horizontalResolution 360
+      fieldOfView 3.141593
+      numberOfLayers 1
+      minRange 0.12
+      maxRange 8.0
+      type "fixed"
+      children [ USE LIDAR_SHAPE ]
+    }
+    Gyro { name "gyro" }
+    HingeJoint {
+      jointParameters HingeJointParameters { axis 0 1 0 anchor 0 0.19 0.05 }
+      device [
+        RotationalMotor { name "wheel_left_motor" maxVelocity 40 maxTorque 1.0 }
+        PositionSensor { name "wheel_left_sensor" }
+      ]
+      endPoint Solid {
+        translation 0 0.19 0.05
+        rotation 1 0 0 -1.5708
+        name "wheel_left"
+        contactMaterial "wheel"
+        children [ USE WHEEL_SHAPE ]
+        boundingObject USE WHEEL_CYL
+        physics USE WHEEL_PHYSICS
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters { axis 0 1 0 anchor 0 -0.19 0.05 }
+      device [
+        RotationalMotor { name "wheel_right_motor" maxVelocity 40 maxTorque 1.0 }
+        PositionSensor { name "wheel_right_sensor" }
+      ]
+      endPoint Solid {
+        translation 0 -0.19 0.05
+        rotation 1 0 0 -1.5708
+        name "wheel_right"
+        contactMaterial "wheel"
+        children [ USE WHEEL_SHAPE ]
+        boundingObject USE WHEEL_CYL
+        physics USE WHEEL_PHYSICS
+      }
+    }
+  ]
+  boundingObject USE CHASSIS_BO
+  physics USE CHASSIS_PHYSICS
+}
+
+# ---- items (visual-only: no physics, top below the 0.20 m scan plane while
+#      at rest; the item_manager supervisor teleports them onto robots) ------
+DEF ITEM_1 Solid {
+  translation -3.45 3.85 0.06
+  name "item_1"
+  children [
+    DEF ITEM_SHAPE Shape {
+      appearance PBRAppearance { baseColor 0.85 0.3 0.6 roughness 0.6 metalness 0 }
+      geometry Box { size 0.14 0.14 0.12 }
+    }
+  ]
+}
+DEF ITEM_2 Solid {
+  translation 3.45 3.85 0.06
+  name "item_2"
+  children [ USE ITEM_SHAPE ]
+}
+DEF ITEM_3 Solid {
+  translation -3.45 2.45 0.06
+  name "item_3"
+  children [ USE ITEM_SHAPE ]
+}
+
+# ---- item manager: invisible supervisor that attaches items to the robot
+#      the fleet auction awarded the task to (listens on /fleet/*) ----------
+DEF ITEM_MANAGER Robot {
+  translation 0 0 -0.5
+  name "item_manager"
+  controller "<extern>"
+  supervisor TRUE
+}

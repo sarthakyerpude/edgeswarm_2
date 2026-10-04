@@ -17,6 +17,9 @@ IDLE, MOVING, WAITING, YIELDING, CHARGING, FAULT = (
 
 STATUS_ORDER = [IDLE, MOVING, WAITING, YIELDING, CHARGING, FAULT]
 
+# RobotState.loc_health values (same numbering as the uint8 on the wire).
+LOC_OK, LOC_DEGRADED, LOC_LOST = 0, 1, 2
+
 
 @dataclass
 class Pose2D:
@@ -30,7 +33,8 @@ class Intent:
     """A time-parameterised claim on space.
 
     cells[i] is occupied from t_enter[i] to t_exit[i] (absolute epoch seconds,
-    already widened by the safety margin at generation time).
+    already widened by the safety margin at generation time). A held peer
+    intent is always on the RECEIVER's clock (see to_receiver_clock).
     """
     cells: List[Cell] = field(default_factory=list)
     t_enter: List[float] = field(default_factory=list)
@@ -52,12 +56,27 @@ class Intent:
                 return (a, b)
         return None
 
+    def to_receiver_clock(self, sender_stamp: float,
+                          rx_time: float) -> "Intent":
+        """Copy with every window shifted onto the receiver's clock:
+        t_local = rx_time + (t - sender_stamp). Only differences of the
+        sender's own timestamps are used, so inter-robot clock skew cancels;
+        network latency is absorbed into the (advisory) windows."""
+        offset = rx_time - sender_stamp
+        return Intent(cells=list(self.cells),
+                      t_enter=[t + offset for t in self.t_enter],
+                      t_exit=[t + offset for t in self.t_exit],
+                      zones=list(self.zones),
+                      goal=Pose2D(self.goal.x, self.goal.y, self.goal.theta),
+                      active_zone_index=self.active_zone_index)
+
 
 @dataclass
 class RobotState:
     """Everything one robot broadcasts about itself."""
     robot_id: str
     seq: int = 0
+    boot_id: int = 0
     stamp: float = 0.0              # capture time (epoch seconds)
     pose: Pose2D = field(default_factory=Pose2D)
     v: float = 0.0                  # linear  m/s
@@ -68,9 +87,15 @@ class RobotState:
     battery_pct: float = 100.0
     waiting_time: float = 0.0
     waiting_for: str = ""
+    # R1: the broadcast right-of-way level L = 1000*class + 100*urgency +
+    # wait bonus (core/priority.level). Integer-valued 0..4909, exact in
+    # float32 on the wire. Consumers that assumed [0, 1] must rescale.
     priority_score: float = 0.0
     alive: bool = True
     intent: Intent = field(default_factory=Intent)
+    intent_seq: int = 0             # seq of the sender's latest Intent
+    loc_health: int = LOC_OK        # LOC_OK | LOC_DEGRADED | LOC_LOST
+    loc_sigma_lat: float = 0.0      # lateral 1-sigma pose error, metres
 
     # Populated locally by the peer registry on receipt; never transmitted.
     rx_time: float = 0.0
@@ -88,6 +113,18 @@ class RobotState:
 
 @dataclass
 class Task:
+    """One pickup->dropoff job.
+
+    deadline (R5): absolute epoch seconds by which the task should be
+    delivered. task_generator fills it as created_at + BUDGET_S[priority]
+    (priority.BUDGET_S, higher priority = tighter budget). 0.0 means "not
+    set": consumers then apply priority.eff_deadline(task, now), which falls
+    back to the same budget from created_at. As (now - created_at) consumes
+    the budget the task's URGENCY escalates (priority.urgency via
+    tasks.task_urgency), so old tasks win batch assignment order, pull order
+    and right-of-way, and never starve. deadline is a soft aging anchor, not
+    a hard abort.
+    """
     task_id: str
     pickup: Cell
     dropoff: Cell

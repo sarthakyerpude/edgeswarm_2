@@ -1,0 +1,131 @@
+#VRML_SIM R2025a utf8
+# EdgeSwarm differential-drive AMR for Webots, mirroring
+# amr_navigation_runtime/models/amr_robot_imu/model.sdf:
+#   chassis 0.40 x 0.32 x 0.12 box, 6 kg, centred 0.11 m above ground
+#   wheels  r=0.05 m, width 0.03 m, at y=+/-0.19 (separation 0.38 m)
+#   caster  passive low-friction sphere r=0.05 at x=0.15 (merged, material "caster")
+#   lidar   360 beams, 2*pi FOV, 0.12-8.0 m, named "lidar", 0.20 m above ground
+# Webots uses FLU/ENU (x forward, y left, z up) like ROS, so poses map 1:1.
+# Device names consumed by webots_warehouse_sim/amr_driver.py:
+#   wheel_left_motor / wheel_right_motor, wheel_left_sensor / wheel_right_sensor, lidar
+
+PROTO EdgeSwarmAMR [
+  field SFVec3f    translation  0 0 0
+  field SFRotation rotation     0 0 1 0
+  field SFString   name         "amr"
+  field SFString   controller   "<extern>"
+]
+{
+  Robot {
+    translation IS translation
+    rotation IS rotation
+    name IS name
+    controller IS controller
+    children [
+      # --- chassis visual ---------------------------------------------------
+      Pose {
+        translation 0 0 0.11
+        children [
+          Shape {
+            appearance PBRAppearance { baseColor 0.15 0.45 0.9 roughness 0.6 metalness 0 }
+            geometry Box { size 0.4 0.32 0.12 }
+          }
+        ]
+      }
+      # --- caster: Solid WITHOUT Physics merges rigidly into the chassis body,
+      #     but keeps its own contactMaterial for low friction (skids in turns).
+      Solid {
+        translation 0.15 0 0.05
+        name "caster"
+        contactMaterial "caster"
+        children [
+          Shape {
+            appearance PBRAppearance { baseColor 0.15 0.15 0.15 roughness 0.9 metalness 0 }
+            geometry DEF CASTER_SPHERE Sphere { radius 0.05 subdivision 2 }
+          }
+        ]
+        boundingObject USE CASTER_SPHERE
+      }
+      # --- lidar ------------------------------------------------------------
+      Lidar {
+        translation 0 0 0.20
+        name "lidar"
+        horizontalResolution 360
+        fieldOfView 6.283185
+        numberOfLayers 1
+        minRange 0.12
+        maxRange 8.0
+        type "fixed"
+        children [
+          Pose {
+            children [
+              Shape {
+                appearance PBRAppearance { baseColor 0.1 0.1 0.1 roughness 0.8 metalness 0 }
+                geometry Cylinder { radius 0.04 height 0.05 }
+              }
+            ]
+          }
+        ]
+      }
+      # --- left wheel ---------------------------------------------------------
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 1 0
+          anchor 0 0.19 0.05
+        }
+        device [
+          RotationalMotor { name "wheel_left_motor" maxVelocity 40 }
+          PositionSensor { name "wheel_left_sensor" }
+        ]
+        endPoint Solid {
+          translation 0 0.19 0.05
+          rotation 1 0 0 -1.5708
+          name "wheel_left"
+          contactMaterial "wheel"
+          children [
+            Shape {
+              appearance PBRAppearance { baseColor 0.15 0.15 0.15 roughness 0.9 metalness 0 }
+              geometry DEF WHEEL_CYL Cylinder { radius 0.05 height 0.03 }
+            }
+          ]
+          boundingObject USE WHEEL_CYL
+          physics Physics { density -1 mass 0.3 }
+        }
+      }
+      # --- right wheel --------------------------------------------------------
+      HingeJoint {
+        jointParameters HingeJointParameters {
+          axis 0 1 0
+          anchor 0 -0.19 0.05
+        }
+        device [
+          RotationalMotor { name "wheel_right_motor" maxVelocity 40 }
+          PositionSensor { name "wheel_right_sensor" }
+        ]
+        endPoint Solid {
+          translation 0 -0.19 0.05
+          rotation 1 0 0 -1.5708
+          name "wheel_right"
+          contactMaterial "wheel"
+          children [
+            Shape {
+              appearance PBRAppearance { baseColor 0.15 0.15 0.15 roughness 0.9 metalness 0 }
+              geometry USE WHEEL_CYL
+            }
+          ]
+          boundingObject USE WHEEL_CYL
+          physics Physics { density -1 mass 0.3 }
+        }
+      }
+    ]
+    boundingObject Pose {
+      translation 0 0 0.11
+      children [ Box { size 0.4 0.32 0.12 } ]
+    }
+    physics Physics {
+      density -1
+      mass 6.0
+      centerOfMass [ 0 0 0.11 ]
+    }
+  }
+}

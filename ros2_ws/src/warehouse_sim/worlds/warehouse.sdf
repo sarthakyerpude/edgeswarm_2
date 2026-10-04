@@ -8,9 +8,9 @@
          Gazebo Harmonic diff-drive robots at this scale.
          ===================================================================== -->
     <physics name="1ms" type="ode">
-      <max_step_size>0.001</max_step_size>
+      <max_step_size>0.005</max_step_size>
       <real_time_factor>1.0</real_time_factor>
-      <real_time_update_rate>1000</real_time_update_rate>
+      <real_time_update_rate>200</real_time_update_rate>
     </physics>
 
     <!-- =====================================================================
@@ -27,6 +27,7 @@
     </plugin>
     <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
     <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-contact-system" name="gz::sim::systems::Contact"/>
 
     <!-- =====================================================================
          LIGHTING
@@ -80,26 +81,29 @@
          rack rows. Interior clear footprint is 12 m (X) x 10 m (Y), centred
          on the world origin.
 
-         Layout along Y (north = +Y, south = -Y):
-           4.7  ..  north wall margin (pickup staging in front of Row 1)
-           3.8  |  Row 1 north face
-           3.5  ..  Row 1 (rack row, depth 0.6 m)
-           3.2  |  Row 1 south face
-                   AISLE_A  - NORMAL, width 1.5 m (3.2 -> 1.7)
-           1.7  |  Row 2 north face
-           1.4  ..  Row 2 (rack row, depth 0.6 m)
-           1.1  |  Row 2 south face
-                   AISLE_B  - NARROW, width 0.9 m (1.1 -> 0.2)
-           0.2  |  Row 3 north face
-          -0.1  ..  Row 3 (rack row, depth 0.6 m)
-          -0.4  |  Row 3 south face
-                   SOUTH CORRIDOR (spawn points + drop-off staging)
-          -4.7  ..  south wall margin
+         Layout along Y (north = +Y, south = -Y). R7 equal aisles: every
+         aisle and the N-S spine is 1.6 m (two 0.32 m robots abreast):
+           5.0  |  north wall face
+                   NORTH AISLE - width 1.6 m (5.0 -> 3.4)
+           3.4  |  Row 1 north face
+           3.1  ..  Row 1 (rack row, depth 0.6 m)
+           2.8  |  Row 1 south face
+                   AISLE_A - width 1.6 m (2.8 -> 1.2)
+           1.2  |  Row 2 north face
+           0.9  ..  Row 2 (rack row, depth 0.6 m)
+           0.6  |  Row 2 south face
+                   AISLE_B - width 1.6 m (0.6 -> -1.0)
+          -1.0  |  Row 3 north face
+          -1.3  ..  Row 3 (rack row, depth 0.6 m)
+          -1.6  |  Row 3 south face
+                   SOUTH AREA 3.4 m (drop-offs y=-2.8, spawns y=-4.0)
+          -5.0  |  south wall face
 
-         Every rack row is split into a west and an east segment, leaving a
-         2 m wide north-south corridor at X in [-1.0, 1.0]. That corridor
-         crossing AISLE_A is the marked INTERSECTION below, where an
-         east-west robot and a north-south robot can occupy the same zone.
+         Every rack row is split into a west and an east 5.0 m segment
+         (X in [-5.8, -0.8] and [0.8, 5.8]), leaving a 1.6 m north-south
+         spine at X in [-0.8, 0.8]; the 0.2 m end gaps to the side walls
+         are closed by the wall_endcap_* links. The spine crossing AISLE_A is the marked
+         INTERSECTION below.
          ===================================================================== -->
     <model name="warehouse_structure">
       <static>true</static>
@@ -178,14 +182,14 @@
         </visual>
       </link>
 
-      <!-- Row 1 (north rack), Y center 3.5, depth 0.6, height 1.6 -->
+      <!-- Row 1 (north rack), Y center 3.1, depth 0.6, height 1.6, length 5.0 -->
       <link name="rack_row1_west">
-        <pose>-3.35 3.5 0.8 0 0 0</pose>
+        <pose>-3.3 3.1 0.8 0 0 0</pose>
         <collision name="collision">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
           <material>
             <ambient>0.5 0.35 0.15 1</ambient>
             <diffuse>0.6 0.42 0.18 1</diffuse>
@@ -193,12 +197,12 @@
         </visual>
       </link>
       <link name="rack_row1_east">
-        <pose>3.35 3.5 0.8 0 0 0</pose>
+        <pose>3.3 3.1 0.8 0 0 0</pose>
         <collision name="collision">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
           <material>
             <ambient>0.5 0.35 0.15 1</ambient>
             <diffuse>0.6 0.42 0.18 1</diffuse>
@@ -206,14 +210,14 @@
         </visual>
       </link>
 
-      <!-- Row 2 (middle rack), Y center 1.4 -->
+      <!-- Row 2 (middle rack), Y center 0.9 -->
       <link name="rack_row2_west">
-        <pose>-3.35 1.4 0.8 0 0 0</pose>
+        <pose>-3.3 0.9 0.8 0 0 0</pose>
         <collision name="collision">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
           <material>
             <ambient>0.5 0.35 0.15 1</ambient>
             <diffuse>0.6 0.42 0.18 1</diffuse>
@@ -221,12 +225,12 @@
         </visual>
       </link>
       <link name="rack_row2_east">
-        <pose>3.35 1.4 0.8 0 0 0</pose>
+        <pose>3.3 0.9 0.8 0 0 0</pose>
         <collision name="collision">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
           <material>
             <ambient>0.5 0.35 0.15 1</ambient>
             <diffuse>0.6 0.42 0.18 1</diffuse>
@@ -234,14 +238,14 @@
         </visual>
       </link>
 
-      <!-- Row 3 (south rack), Y center -0.1 -->
+      <!-- Row 3 (south rack), Y center -1.3 -->
       <link name="rack_row3_west">
-        <pose>-3.35 -0.1 0.8 0 0 0</pose>
+        <pose>-3.3 -1.3 0.8 0 0 0</pose>
         <collision name="collision">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
           <material>
             <ambient>0.5 0.35 0.15 1</ambient>
             <diffuse>0.6 0.42 0.18 1</diffuse>
@@ -249,15 +253,96 @@
         </visual>
       </link>
       <link name="rack_row3_east">
-        <pose>3.35 -0.1 0.8 0 0 0</pose>
+        <pose>3.3 -1.3 0.8 0 0 0</pose>
         <collision name="collision">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>4.7 0.6 1.6</size></box></geometry>
+          <geometry><box><size>5.0 0.6 1.6</size></box></geometry>
           <material>
             <ambient>0.5 0.35 0.15 1</ambient>
             <diffuse>0.6 0.42 0.18 1</diffuse>
+          </material>
+        </visual>
+      </link>
+
+      <!-- Rack-end caps (R7): close the 0.2 m rack-to-side-wall gaps
+           (x in [-6,-5.8] / [5.8,6]) so no planner routes through them. -->
+      <link name="wall_endcap_row1_west">
+        <pose>-5.9 3.1 0.8 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+          <material>
+            <ambient>0.85 0.85 0.8 1</ambient>
+            <diffuse>0.9 0.9 0.85 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <link name="wall_endcap_row1_east">
+        <pose>5.9 3.1 0.8 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+          <material>
+            <ambient>0.85 0.85 0.8 1</ambient>
+            <diffuse>0.9 0.9 0.85 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <link name="wall_endcap_row2_west">
+        <pose>-5.9 0.9 0.8 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+          <material>
+            <ambient>0.85 0.85 0.8 1</ambient>
+            <diffuse>0.9 0.9 0.85 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <link name="wall_endcap_row2_east">
+        <pose>5.9 0.9 0.8 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+          <material>
+            <ambient>0.85 0.85 0.8 1</ambient>
+            <diffuse>0.9 0.9 0.85 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <link name="wall_endcap_row3_west">
+        <pose>-5.9 -1.3 0.8 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+          <material>
+            <ambient>0.85 0.85 0.8 1</ambient>
+            <diffuse>0.9 0.9 0.85 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <link name="wall_endcap_row3_east">
+        <pose>5.9 -1.3 0.8 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.2 0.6 1.6</size></box></geometry>
+          <material>
+            <ambient>0.85 0.85 0.8 1</ambient>
+            <diffuse>0.9 0.9 0.85 1</diffuse>
           </material>
         </visual>
       </link>
@@ -266,17 +351,16 @@
 
     <!-- =====================================================================
          INTERSECTION MARKER (visual only, no collision)
-         Flags the zone where the north-south cross corridor (X in
-         [-1.0, 1.0]) crosses AISLE_A (the 1.5 m normal aisle, Y in
-         [1.7, 3.2]). A robot travelling along AISLE_A and a robot travelling
+         Flags the zone where the north-south spine (X in [-0.8, 0.8])
+         crosses AISLE_A (1.6 m, Y in [1.2, 2.8]). A robot travelling along AISLE_A and a robot travelling
          along the cross corridor both pass through this rectangle.
          ===================================================================== -->
     <model name="intersection_marker">
       <static>true</static>
       <link name="marker">
-        <pose>0 2.45 0.006 0 0 0</pose>
+        <pose>0 2.0 0.006 0 0 0</pose>
         <visual name="visual">
-          <geometry><box><size>2.0 1.5 0.01</size></box></geometry>
+          <geometry><box><size>1.6 1.6 0.01</size></box></geometry>
           <material>
             <ambient>0.9 0.6 0.05 0.6</ambient>
             <diffuse>0.95 0.65 0.05 0.6</diffuse>
@@ -340,7 +424,7 @@
     <model name="pickup_1">
       <static>true</static>
       <link name="marker">
-        <pose>-3.35 3.95 0.006 0 0 0</pose>
+        <pose>-3.45 3.85 0.006 0 0 0</pose>
         <visual name="visual">
           <geometry><cylinder><radius>0.25</radius><length>0.01</length></cylinder></geometry>
           <material>
@@ -353,7 +437,7 @@
     <model name="pickup_2">
       <static>true</static>
       <link name="marker">
-        <pose>3.35 3.95 0.006 0 0 0</pose>
+        <pose>3.45 3.85 0.006 0 0 0</pose>
         <visual name="visual">
           <geometry><cylinder><radius>0.25</radius><length>0.01</length></cylinder></geometry>
           <material>
@@ -366,7 +450,7 @@
     <model name="pickup_3">
       <static>true</static>
       <link name="marker">
-        <pose>-3.35 2.45 0.006 0 0 0</pose>
+        <pose>-3.45 2.45 0.006 0 0 0</pose>
         <visual name="visual">
           <geometry><cylinder><radius>0.25</radius><length>0.01</length></cylinder></geometry>
           <material>

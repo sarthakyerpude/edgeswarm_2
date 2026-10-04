@@ -14,6 +14,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -23,9 +24,13 @@ def generate_launch_description():
     robot_id = LaunchConfiguration("robot_id")
     mode = LaunchConfiguration("coordination_mode")
     use_sim_time = LaunchConfiguration("use_sim_time")
+    pose_source = LaunchConfiguration("pose_source")
     grid_yaml = LaunchConfiguration("grid_yaml")
     params_file = LaunchConfiguration("params_file")
     gate = LaunchConfiguration("enable_cmd_vel_gate")
+    home_x = LaunchConfiguration("home_x")
+    home_y = LaunchConfiguration("home_y")
+    home_yaw = LaunchConfiguration("home_yaw")
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -41,6 +46,9 @@ def generate_launch_description():
                          "lookup fails with 'extrapolation into the future' - "
                          "an error that looks like a TF bug and costs a day.")),
         DeclareLaunchArgument(
+            "pose_source", default_value="tf",
+            description="tf for map-frame localization; odom for mock fixtures only."),
+        DeclareLaunchArgument(
             "grid_yaml",
             default_value=PathJoinSubstitution([
                 FindPackageShare("amr_description"), "config",
@@ -55,6 +63,15 @@ def generate_launch_description():
                          "owns cmd_vel. true: subscribe cmd_vel_raw and "
                          "publish gated cmd_vel. Agree with the nav team "
                          "before enabling.")),
+        DeclareLaunchArgument(
+            "home_x", default_value=".nan",
+            description="Dock/charging pose x (m, map). Normally the spawn "
+                        "pose; .nan (YAML NaN) disables return-to-dock."),
+        DeclareLaunchArgument("home_y", default_value=".nan"),
+        DeclareLaunchArgument(
+            "home_yaw", default_value=".nan",
+            description="Dock heading (rad); the robot aligns to it before "
+                        "charging. .nan = any heading."),
 
         Node(
             package="amr_description",
@@ -73,9 +90,16 @@ def generate_launch_description():
                     "robot_id": robot_id,
                     "coordination_mode": mode,
                     "use_sim_time": use_sim_time,
+                    "pose_source": pose_source,
                     "grid_yaml": grid_yaml,
                     "enable_cmd_vel_gate": gate,
+                    "home_x": ParameterValue(home_x, value_type=float),
+                    "home_y": ParameterValue(home_y, value_type=float),
+                    "home_yaw": ParameterValue(home_yaw, value_type=float),
                 },
             ],
+            # ROS 2 Jazzy's tf2 TransformListener subscribes to absolute /tf
+            # names; remap those names into this robot's isolated TF tree.
+            remappings=[("/tf", "tf"), ("/tf_static", "tf_static")],
         ),
     ])

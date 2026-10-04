@@ -1,0 +1,282 @@
+<?xml version="1.0" ?>
+<sdf version="1.9">
+  <model name="amr_robot">
+    <!--
+      Lightweight differential-drive AMR. Basic shapes only (box/cylinder/
+      sphere), no meshes, to match the rest of the warehouse world.
+
+      Frame: model origin sits on the ground, centred between the two
+      drive wheels (x forward, y left, z up).
+
+        wheel_radius      = 0.05 m
+        wheel_separation  = 0.38 m  (matches <wheel_separation> below)
+        chassis            0.40 x 0.32 x 0.12 m box, mass 6 kg
+        caster             passive sphere, front, same radius as the wheels
+                            so the chassis sits level
+        laser_link         lidar puck on top of the chassis
+
+      The model is spawned with an explicit `-name <robot_id>` argument by
+      the launch file, so every generated topic (cmd_vel, odometry, pose,
+      the lidar scan) is automatically namespaced under that entity name -
+      this file itself never hard-codes "robot_1".
+    -->
+
+    <link name="base_link">
+      <pose>0 0 0.11 0 0 0</pose>
+      <inertial>
+        <mass>6.0</mass>
+        <inertia>
+          <ixx>0.0584</ixx>
+          <iyy>0.0872</iyy>
+          <izz>0.1312</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><box><size>0.4 0.32 0.12</size></box></geometry>
+      </collision>
+      <sensor name="chassis_contact" type="contact">
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <contact><collision>collision</collision></contact>
+      </sensor>
+      <visual name="visual">
+        <geometry><box><size>0.4 0.32 0.12</size></box></geometry>
+        <material>
+          <ambient>0.1 0.4 0.85 1</ambient>
+          <diffuse>0.15 0.45 0.9 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="imu" type="imu">
+        <pose>0 0 0.02 0 0 0</pose>
+        <!-- Match the URDF frame; Gazebo's default is the scoped
+             "<model>/base_link/imu", which is not in the ROS TF tree. -->
+        <gz_frame_id>imu_link</gz_frame_id>
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <imu>
+          <angular_velocity>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.0002</stddev></noise></z>
+          </angular_velocity>
+          <linear_acceleration>
+            <x><noise type="gaussian"><mean>0</mean><stddev>0.02</stddev></noise></x>
+            <y><noise type="gaussian"><mean>0</mean><stddev>0.02</stddev></noise></y>
+            <z><noise type="gaussian"><mean>0</mean><stddev>0.02</stddev></noise></z>
+          </linear_acceleration>
+        </imu>
+      </sensor>
+    </link>
+
+    <link name="wheel_left">
+      <pose>0 0.19 0.05 1.5708 0 0</pose>
+      <inertial>
+        <mass>0.3</mass>
+        <inertia>
+          <ixx>0.00021</ixx>
+          <iyy>0.00021</iyy>
+          <izz>0.000375</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><cylinder><radius>0.05</radius><length>0.03</length></cylinder></geometry>
+        <surface>
+          <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+        </surface>
+      </collision>
+      <sensor name="wheel_contact" type="contact">
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <contact><collision>collision</collision></contact>
+      </sensor>
+      <visual name="visual">
+        <geometry><cylinder><radius>0.05</radius><length>0.03</length></cylinder></geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.15 0.15 0.15 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <link name="wheel_right">
+      <pose>0 -0.19 0.05 1.5708 0 0</pose>
+      <inertial>
+        <mass>0.3</mass>
+        <inertia>
+          <ixx>0.00021</ixx>
+          <iyy>0.00021</iyy>
+          <izz>0.000375</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><cylinder><radius>0.05</radius><length>0.03</length></cylinder></geometry>
+        <surface>
+          <friction><ode><mu>1.0</mu><mu2>1.0</mu2></ode></friction>
+        </surface>
+      </collision>
+      <sensor name="wheel_contact" type="contact">
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <contact><collision>collision</collision></contact>
+      </sensor>
+      <visual name="visual">
+        <geometry><cylinder><radius>0.05</radius><length>0.03</length></cylinder></geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.15 0.15 0.15 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- Passive caster (front). Fixed joint + low friction so it skids
+         instead of resisting turns - a standard simplification for a
+         lightweight two-wheel-drive model. -->
+    <link name="caster">
+      <pose>0.15 0 0.05 0 0 0</pose>
+      <inertial>
+        <mass>0.05</mass>
+        <inertia>
+          <ixx>0.00005</ixx>
+          <iyy>0.00005</iyy>
+          <izz>0.00005</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry><sphere><radius>0.05</radius></sphere></geometry>
+        <surface>
+          <friction><ode><mu>0.01</mu><mu2>0.01</mu2></ode></friction>
+        </surface>
+      </collision>
+      <sensor name="caster_contact" type="contact">
+        <always_on>true</always_on>
+        <update_rate>30</update_rate>
+        <contact><collision>collision</collision></contact>
+      </sensor>
+      <visual name="visual">
+        <geometry><sphere><radius>0.05</radius></sphere></geometry>
+        <material>
+          <ambient>0.1 0.1 0.1 1</ambient>
+          <diffuse>0.15 0.15 0.15 1</diffuse>
+        </material>
+      </visual>
+    </link>
+
+    <!-- Lidar puck. No <topic> is set on the sensor below on purpose - gz-sim
+         then uses its default topic naming
+         (/world/<world>/model/<entity_name>/link/laser_link/sensor/lidar/scan),
+         which is exactly what warehouse_sim/config/bridge.yaml expects. -->
+    <link name="laser_link">
+      <pose>0 0 0.20 0 0 0</pose>
+      <inertial>
+        <mass>0.1</mass>
+        <inertia>
+          <ixx>0.00003</ixx>
+          <iyy>0.00003</iyy>
+          <izz>0.00003</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <visual name="visual">
+        <geometry><cylinder><radius>0.04</radius><length>0.05</length></cylinder></geometry>
+        <material>
+          <ambient>0.05 0.05 0.05 1</ambient>
+          <diffuse>0.1 0.1 0.1 1</diffuse>
+        </material>
+      </visual>
+      <sensor name="lidar" type="gpu_lidar">
+        <!-- LaserScan.header.frame_id must be a frame that exists in the
+             robot's TF tree (URDF link "laser_link"). Without this Gazebo
+             publishes "<model>/laser_link/lidar", AMCL and the costmaps drop
+             every scan, the map frame never appears and Nav2 never
+             activates, so the robots never move. -->
+        <gz_frame_id>laser_link</gz_frame_id>
+        <always_on>true</always_on>
+        <update_rate>10</update_rate>
+        <visualize>false</visualize>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159</min_angle>
+              <max_angle>3.14159</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.12</min>
+            <max>8.0</max>
+            <resolution>0.01</resolution>
+          </range>
+        </lidar>
+      </sensor>
+    </link>
+
+    <joint name="left_wheel_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>wheel_left</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit><lower>-1e16</lower><upper>1e16</upper></limit>
+      </axis>
+    </joint>
+
+    <joint name="right_wheel_joint" type="revolute">
+      <parent>base_link</parent>
+      <child>wheel_right</child>
+      <axis>
+        <xyz>0 1 0</xyz>
+        <limit><lower>-1e16</lower><upper>1e16</upper></limit>
+      </axis>
+    </joint>
+
+    <joint name="caster_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>caster</child>
+    </joint>
+
+    <joint name="laser_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>laser_link</child>
+    </joint>
+
+    <!-- cmd_vel -> wheel motion, and odometry out. <topic>/<odom_topic> are
+         deliberately left UNSET: DiffDrive's own default is
+         /model/<entity_name>/cmd_vel and /model/<entity_name>/odometry,
+         built from the model's actual spawned name. Setting an explicit
+         relative string here (an earlier mistake, caught by checking the
+         plugin source) is used AS-IS instead of being namespaced, which
+         would collide across every robot spawned from this same file. -->
+    <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+      <wheel_separation>0.38</wheel_separation>
+      <wheel_radius>0.05</wheel_radius>
+      <odom_publish_frequency>30</odom_publish_frequency>
+      <frame_id>odom</frame_id>
+      <child_frame_id>base_footprint</child_frame_id>
+      <max_linear_acceleration>2.0</max_linear_acceleration>
+      <min_linear_acceleration>-2.0</min_linear_acceleration>
+      <max_angular_acceleration>4.0</max_angular_acceleration>
+      <min_angular_acceleration>-4.0</min_angular_acceleration>
+    </plugin>
+
+    <!-- DiffDrive also unconditionally publishes /model/<name>/tf
+         (gz.msgs.Pose_V, built from the same wheel-encoder odometry) every
+         time it publishes odometry - no separate plugin needed for TF.
+         bridge.yaml bridges that topic straight to ROS /tf. -->
+  </model>
+</sdf>

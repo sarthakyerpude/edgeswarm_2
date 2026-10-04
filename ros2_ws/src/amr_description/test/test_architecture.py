@@ -59,7 +59,8 @@ def test_core_modules_import_standalone():
     import sys
     sys.path.insert(0, str(CORE.parents[1]))
     for name in ["models", "gridmap", "priority", "geometry", "conflict",
-                 "zone", "deadlock", "tasks", "peers", "astar", "coordinator"]:
+                 "zone", "deadlock", "tasks", "peers", "astar", "safety",
+                 "traffic", "coordinator"]:
         importlib.import_module(f"amr_fleet.core.{name}")
 
 

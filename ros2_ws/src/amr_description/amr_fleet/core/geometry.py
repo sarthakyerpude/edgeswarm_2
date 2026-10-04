@@ -9,9 +9,17 @@ long horizon where constant-velocity extrapolation is meaningless.
 import math
 from typing import Optional, Tuple
 
-# Tuned for a 0.16 m footprint radius. Keep these consistent with the URDF
-# collision geometry in amr_description/urdf/.
-ROBOT_RADIUS_M = 0.16
+# Oriented-rectangle hitbox constants (Increment 3/4, R2). The authoritative
+# definitions live in core/hitbox.py; they are re-exported here because this
+# module is the historical home of the robot's footprint numbers.
+from .hitbox import (HB_CHASSIS_HALF_W, HB_HALF_L,  # noqa: F401
+                     HB_HALF_W, HB_R_CIRC)
+
+# LEGACY ALIAS - the old disc model. Circumscribed radius of the 0.40 x
+# 0.32 m chassis is ~0.256 m, rounded up to 0.26 m. Kept for the disc-based
+# safety_permit path and the Nav2 costmap configs; NEW code must use the
+# wheel-inclusive rect in core/hitbox.py (HB_HALF_L/HB_HALF_W, HB_R_CIRC).
+ROBOT_RADIUS_M = 0.26
 SAFETY_MARGIN_M = 0.15
 DEFAULT_HORIZON_S = 8.0
 

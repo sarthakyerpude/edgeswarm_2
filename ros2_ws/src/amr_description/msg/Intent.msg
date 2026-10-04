@@ -23,8 +23,10 @@ uint32 seq
 # rosidl serialises them far more cheaply and they are trivial to zip() in
 # Python:  for r, c, ti, to in zip(path_rows, path_cols, t_enter, t_exit)
 #
-# t_enter/t_exit are ABSOLUTE epoch seconds, already widened by a safety
-# margin at generation time to absorb clock skew and control lag.
+# t_enter/t_exit are ABSOLUTE seconds on the SENDER's clock, re-stamped from
+# header.stamp at every publish and widened by a safety margin. Only the
+# undriven part of the route is sent (<= 60 cells / 8 s). Receivers convert
+# with t_local = rx_time + (t - header.stamp), so clock skew cancels.
 int32[]   path_rows        # grid row of each cell, in traversal order
 int32[]   path_cols        # grid column of each cell
 float64[] t_enter          # predicted entry time into that cell

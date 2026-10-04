@@ -14,10 +14,31 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription,
+                            SetEnvironmentVariable, TimerAction)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def _wsl_gpu_actions():
+    """Route Gazebo rendering to the GPU via WSLg's D3D12 Mesa driver.
+
+    Non-interactive WSL shells never source ~/.bashrc, so without these the
+    sensors system falls back to llvmpipe software rendering and gpu_lidar
+    starves. Only applied under WSL: on native Linux GALLIUM_DRIVER=d3d12
+    does not exist and would break rendering.
+    """
+    try:
+        with open('/proc/version', encoding='utf-8') as fh:
+            if 'microsoft' not in fh.read().lower():
+                return []
+    except OSError:
+        return []
+    return [
+        SetEnvironmentVariable('GALLIUM_DRIVER', 'd3d12'),
+        SetEnvironmentVariable('MESA_D3D12_DEFAULT_ADAPTER_NAME', 'NVIDIA'),
+    ]
 
 
 def generate_launch_description():
@@ -25,6 +46,7 @@ def generate_launch_description():
     amr_description_share = get_package_share_directory('amr_description')
 
     world_path = os.path.join(warehouse_sim_share, 'worlds', 'warehouse.sdf')
+    gui_config = os.path.join(warehouse_sim_share, 'config', 'gui_topview.config')
     bridge_config_path = os.path.join(warehouse_sim_share, 'config', 'bridge.yaml')
     robot_sdf_path = os.path.join(
         amr_description_share, 'models', 'amr_robot', 'model.sdf'
@@ -50,7 +72,8 @@ def generate_launch_description():
                 get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
             )
         ),
-        launch_arguments={'gz_args': f'-r {world_path}'}.items(),
+        launch_arguments={
+            'gz_args': f'-r {world_path} --gui-config {gui_config}'}.items(),
     )
 
     # --- Spawn the robot --------------------------------------------------
@@ -88,6 +111,7 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            *_wsl_gpu_actions(),
             robot_name_arg,
             x_arg,
             y_arg,

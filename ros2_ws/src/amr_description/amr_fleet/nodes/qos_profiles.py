@@ -95,4 +95,36 @@ DIAGNOSTIC_QOS = QoSProfile(
     depth=5,
 )
 
-__all__ = ["SENSOR_QOS", "STATE_QOS", "COORD_QOS", "MAP_QOS", "DIAGNOSTIC_QOS"]
+# Motion permits are control decisions, not best-effort telemetry. Keep the
+# stream reliable and volatile so a late-joining gate waits for a fresh permit
+# instead of treating cached GO state as current.
+PERMIT_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
+
+# A coordination path drives Nav2's controller action; losing a reroute is not
+# acceptable. Transient-local durability gives a late-starting/restarted
+# controller bridge the latest route, while keep-last depth prevents backlog.
+PATH_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+)
+
+# Navigation readiness is a heartbeat, not retained state. A late subscriber
+# must wait for a fresh action-server check rather than trust a cached READY
+# sample from a bridge that may have exited.
+NAV_STATUS_QOS = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.VOLATILE,
+    history=HistoryPolicy.KEEP_LAST,
+    depth=1,
+    lifespan=Duration(seconds=0, nanoseconds=750_000_000),
+)
+
+__all__ = ["SENSOR_QOS", "STATE_QOS", "COORD_QOS", "MAP_QOS",
+           "DIAGNOSTIC_QOS", "PERMIT_QOS", "PATH_QOS", "NAV_STATUS_QOS"]

@@ -19,6 +19,7 @@
     # [FLEET-WIDE] every robot must load the SAME grid file.
     grid_yaml: ""            # set by the launch file to the installed path
     map_frame: "map"
+    base_frame: "base_footprint"
 
     # ---- coordination ----------------------------------------------------
     # "proposed" = the full distributed system
@@ -33,9 +34,22 @@
     intent_keepalive_hz: 1.0
 
     # ---- motion ----------------------------------------------------------
-    v_nominal: 0.4              # m/s. MUST match the real robot's cruise
+    v_nominal: 0.6              # m/s (1.5x the original 0.4; 1.0 scraped racks). MUST match the real robot's cruise
+                                # = velocity_gate max_linear_x
                                 # speed or every ETA in every Intent is wrong
-    pose_source: "odom"         # odom only in this coordination package
+    # Gazebo/hardware localization must provide map -> base_footprint TF.
+    # The no-Gazebo kinematic fixture sets pose_source:=odom explicitly.
+    pose_source: "tf"
+    map_pose_startup_timeout_s: 15.0
+    map_pose_timeout_s: 3.0     # was 1.0: AMCL lags under CPU load (RTF<1)
+
+    # ---- health tolerances (sim seconds) ----------------------------------
+    # 1.0 s gates faulted robots on every executor stall; each fault dropped
+    # the task and the fleet slowly livelocked. Keep these generous in sim.
+    scan_timeout_s: 3.0
+    odom_timeout_s: 3.0
+    peer_suspect_s: 2.0         # [FLEET-WIDE]
+    peer_dead_s: 5.0            # [FLEET-WIDE]
 
     # ---- actuator ownership ----------------------------------------------
     # false  : we publish motion_permit only; amr_navigation owns cmd_vel.
@@ -46,21 +60,51 @@
 
     # ---- obstacle reporting ---------------------------------------------
     enable_obstacle_reporting: true
-    obstacle_persist_scans: 5   # consecutive scans before declaring a cell
+    obstacle_persist_scans: 8   # consecutive scans before declaring a cell
                                 # blocked. Stops a passing worker permanently
                                 # poisoning the map; still catches a dropped
                                 # pallet within ~0.5 s at 10 Hz.
+    obstacle_clear_scans: 3     # consecutive free-space lidar rays before
+                                # retracting a dynamic blockage report.
     obstacle_expiry_s: 20.0     # MANDATORY. Without expiry a parked forklift
                                 # blocks an aisle for the rest of the run.
+    obstacle_static_margin_cells: 4   # ignore hits within 0.4 m of walls/racks
+                                      # (localization error, not obstacles).
+                                      # 2 let rack-edge lidar jitter flood the
+                                      # shared map with phantom blockages in
+                                      # BOTH sims (see wiki Webots session).
+    obstacle_peer_radius_m: 0.6       # ignore hits on peer robots' bodies;
+                                      # peers are handled by intents/zones
+    obstacle_max_angular_vel: 0.5     # skip scans while rotating fast
+    obstacle_max_scan_age_s: 0.3      # fallback when scan-time TF unavailable
+
+    # Return an assigned task to a fleet-wide bid window after this long
+    # without a valid route following a dynamic-map change.
+    task_route_failure_timeout_s: 5.0
 
     # ---- battery (simple model; replace with a real ADC on hardware) ------
     battery_initial_pct: 100.0
     battery_per_metre_pct: 0.35
 
-    # ---- executor --------------------------------------------------------
-    # NOT cpu_count(). Three robot processes x 4 threads on a 4-core machine,
-    # alongside Gazebo, causes context-switch thrash and jittery control.
-    executor_threads: 3
+    # ---- return-to-dock + charging ---------------------------------------
+    # The spawn pose is the robot's charging dock. home_x/home_y come from
+    # the launch file (fleet_layout.ROBOTS); NaN disables the behaviour.
+    return_home_enabled: true
+    return_home_idle_s: 4.0     # idle grace before heading home; below the
+                                # auction's 5 s no-bid retry so a queued
+                                # task usually claims the robot first
+    # Docking means sitting ON the spawn pose (home_x/home_y/home_yaw from
+    # the launch file), not near it. See amr_fleet/core/docking.py.
+    dock_approach_m: 0.35       # within this, switch to the precise approach
+    dock_pos_tol_m: 0.08        # DOCKED only within this of the spawn point
+    dock_yaw_tol_deg: 5.0       # ... and this of the spawn heading, at rest
+    dock_align_timeout_s: 20.0  # then back off and re-approach ...
+    dock_max_retries: 2         # ... at most this often, then dock anyway
+    dock_backoff_m: 0.4         # back-off distance along the dock heading
+    charge_rate_pct_per_s: 1.0  # sim seconds, only while DOCKED
+    battery_low_pct: 30.0       # at/below: go home after the current task
+                                # and stop bidding ...
+    battery_resume_pct: 80.0    # ... until charged back to this
 
     # ---- goal (optional; normally set by winning a task) -----------------
     goal_cell: [-1, -1]

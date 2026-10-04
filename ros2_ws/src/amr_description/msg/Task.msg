@@ -6,7 +6,7 @@
 # IMPORTANT: whatever publishes this is an EVENT SOURCE, not a decision maker.
 # It says WHAT needs doing. It never says WHO does it. Any robot (or an
 # external order feed) may announce a task. The assignment is decided by the
-# auction in Task*/TaskBid/TaskAward, with no auctioneer.
+# auction in TaskAnnounce/TaskBid/TaskAward, with no auctioneer.
 # =============================================================================
 
 std_msgs/Header header

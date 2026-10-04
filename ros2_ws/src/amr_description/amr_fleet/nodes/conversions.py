@@ -6,12 +6,17 @@ conversion in one place is what allows core/ to be unit-tested without ROS and
 (later) run on hardware with a different transport.
 """
 import math
-from typing import List
+from typing import List, Optional
 
 from amr_description.msg import (Intent as RosIntent, MapUpdate as RosMapUpdate,
                                  MotionPermit as RosPermit,
                                  RobotState as RosRobotState, Task as RosTask,
                                  Conflict as RosConflict)
+
+try:    # Generated only after the next colcon build (R6, msg/TaskCancel.msg).
+    from amr_description.msg import TaskCancel as RosTaskCancel
+except ImportError:                      # pragma: no cover - stale install
+    RosTaskCancel = None
 from amr_fleet.core.models import (Conflict, Intent, Permit, Pose2D, RobotState,
                                    STATUS_ORDER, Task)
 
@@ -30,6 +35,7 @@ def state_to_ros(s: RobotState, clock) -> RosRobotState:
     m.header.frame_id = "map"
     m.robot_id = s.robot_id
     m.seq = int(s.seq) & 0xFFFFFFFF
+    m.boot_id = int(s.boot_id) & 0xFFFFFFFFFFFFFFFF
     m.pose.x, m.pose.y, m.pose.theta = s.pose.x, s.pose.y, s.pose.theta
     m.velocity.linear.x = float(s.v)
     m.velocity.angular.z = float(s.w)
@@ -41,6 +47,9 @@ def state_to_ros(s: RobotState, clock) -> RosRobotState:
     m.waiting_for = s.waiting_for or ""
     m.priority_score = float(s.priority_score)
     m.alive = bool(s.alive)
+    m.intent_seq = int(s.intent_seq) & 0xFFFFFFFF
+    m.loc_health = max(0, min(255, int(s.loc_health)))
+    m.loc_sigma_lat = float(s.loc_sigma_lat)
     return m
 
 
@@ -48,6 +57,7 @@ def state_from_ros(m: RosRobotState) -> RobotState:
     return RobotState(
         robot_id=m.robot_id,
         seq=int(m.seq),
+        boot_id=int(m.boot_id),
         stamp=_stamp_to_float(m.header.stamp),
         pose=Pose2D(m.pose.x, m.pose.y, m.pose.theta),
         v=m.velocity.linear.x,
@@ -60,15 +70,26 @@ def state_from_ros(m: RosRobotState) -> RobotState:
         waiting_for=m.waiting_for,
         priority_score=float(m.priority_score),
         alive=bool(m.alive),
+        intent_seq=int(m.intent_seq),
+        loc_health=int(m.loc_health),
+        loc_sigma_lat=float(m.loc_sigma_lat),
     )
 
 
 # ---------------------------------------------------------------- Intent ----
 def intent_to_ros(robot_id: str, seq: int, it: Intent, clock,
                   task_id: str = "", task_priority: int = 0,
-                  priority_score: float = 0.0) -> RosIntent:
+                  priority_score: float = 0.0,
+                  stamp: Optional[float] = None) -> RosIntent:
+    """stamp: the clock reading the windows were timed from. Receivers use
+    t - header.stamp, so it must be the same 'now' the intent was built at."""
     m = RosIntent()
-    m.header.stamp = clock.now().to_msg()
+    if stamp is None:
+        m.header.stamp = clock.now().to_msg()
+    else:
+        sec = math.floor(stamp)
+        m.header.stamp.sec = int(sec)
+        m.header.stamp.nanosec = min(999999999, int((stamp - sec) * 1e9))
     m.header.frame_id = "map"
     m.robot_id = robot_id
     m.seq = int(seq) & 0xFFFFFFFF
@@ -85,10 +106,13 @@ def intent_to_ros(robot_id: str, seq: int, it: Intent, clock,
     return m
 
 
-def intent_from_ros(m: RosIntent) -> Intent:
+def intent_from_ros(m: RosIntent, rx_time: Optional[float] = None) -> Intent:
+    """With rx_time (receiver clock), windows are converted to the receiver's
+    clock: t_local = rx_time + (t - header.stamp), so clock skew between
+    robots cancels. Without it, the sender's times are kept as sent."""
     # Defensive: never trust remote array lengths to agree.
     n = min(len(m.path_rows), len(m.path_cols), len(m.t_enter), len(m.t_exit))
-    return Intent(
+    it = Intent(
         cells=[(int(m.path_rows[i]), int(m.path_cols[i])) for i in range(n)],
         t_enter=[float(m.t_enter[i]) for i in range(n)],
         t_exit=[float(m.t_exit[i]) for i in range(n)],
@@ -96,6 +120,9 @@ def intent_from_ros(m: RosIntent) -> Intent:
         goal=Pose2D(m.goal.x, m.goal.y, m.goal.theta),
         active_zone_index=int(m.active_zone_index),
     )
+    if rx_time is None:
+        return it
+    return it.to_receiver_clock(_stamp_to_float(m.header.stamp), rx_time)
 
 
 # ------------------------------------------------------------ MapUpdate ----
@@ -145,6 +172,31 @@ def task_to_ros(d: dict, clock, announcer: str) -> RosTask:
     m.deadline = float(d.get("deadline", 0.0))
     m.announcer_id = announcer
     return m
+
+
+# ----------------------------------------------------------- TaskCancel -----
+def task_cancel_to_ros(task_id: str, requester_id: str, reason: str,
+                       clock=None, msg=None):
+    """Build a TaskCancel message (R6). `msg` lets tests pass a stub when the
+    generated class is not installed yet; nodes omit it."""
+    if msg is None:
+        if RosTaskCancel is None:
+            raise RuntimeError(
+                "amr_description.msg.TaskCancel is not installed; "
+                "rebuild amr_description (msg/TaskCancel.msg)")
+        msg = RosTaskCancel()
+    if clock is not None:
+        msg.header.stamp = clock.now().to_msg()
+    msg.task_id = str(task_id)
+    msg.requester_id = str(requester_id)
+    msg.reason = str(reason)
+    return msg
+
+
+def task_cancel_from_ros(m) -> dict:
+    """Duck-typed on purpose: works on the generated class and on stubs."""
+    return dict(task_id=str(m.task_id), requester_id=str(m.requester_id),
+                reason=str(m.reason))
 
 
 # --------------------------------------------------------------- Permit -----

@@ -1,0 +1,7 @@
+# Merge this entry into the bridge parameter file after adding the IMU sensor
+# block to the Gazebo model and confirming its topic with `gz topic -l`.
+- ros_topic_name: "/robot_1/imu/data"
+  gz_topic_name: "/world/warehouse/model/robot_1/link/base_link/sensor/imu/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS

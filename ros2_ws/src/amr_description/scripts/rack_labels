@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""Console entry point for amr_fleet.nodes.rack_labels_node
+
+ament_cmake installs this file into lib/amr_description/ so that
+`ros2 run amr_description rack_labels` works. The real implementation lives in the
+amr_fleet Python package.
+"""
+from amr_fleet.nodes.rack_labels_node import main
+
+if __name__ == "__main__":
+    main()

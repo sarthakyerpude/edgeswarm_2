@@ -35,5 +35,6 @@ uint64 lamport_ts
 float32 priority_score     # my score at request time - the primary ordering key
 float64 t_enter_est        # when I expect to enter  (epoch seconds)
 float64 t_exit_est         # when I expect to leave  (epoch seconds)
-uint32  req_id             # per-robot request counter; echoed back in ZoneGrant
-                           # so a late reply to an abandoned request is ignored
+uint32  req_id             # request ID randomized per process start, then
+                           # incremented; echoed in ZoneGrant so retained or
+                           # late replies from earlier process epochs are ignored

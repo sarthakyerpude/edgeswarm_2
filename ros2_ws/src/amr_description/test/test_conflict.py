@@ -10,13 +10,13 @@ from amr_fleet.core.models import Intent, Pose2D, RobotState
 def test_head_on_collision_predicted():
     """Closing at 1 m/s from 4 m apart.
 
-    Contact distance D = 2*0.16 + 0.15 = 0.47 m, so first contact is at
-    (4.0 - 0.47) / 1.0 = 3.53 s. Checked against hand arithmetic, not against
+    Contact distance D = 2*0.26 + 0.15 = 0.67 m, so first contact is at
+    (4.0 - 0.67) / 1.0 = 3.33 s. Checked against hand arithmetic, not against
     whatever the code happens to return.
     """
     t, d = time_to_collision(0, 0, 0.5, 0, 4.0, 0, -0.5, 0)
     assert t is not None
-    assert abs(t - 3.53) < 0.05, f"expected ~3.53 s, got {t}"
+    assert abs(t - 3.33) < 0.05, f"expected ~3.33 s, got {t}"
 
 
 def test_separating_robots_never_conflict():
@@ -101,3 +101,20 @@ def test_conflict_priority_flag_is_deterministic():
     out = det.detect(me, me.intent, {"robot_2": peer}, now=0.0)
     assert any(c.i_have_priority for c in out if c.peer_id == "robot_2")
 
+
+def test_priority_frozen_per_encounter():
+    """The waiting_time term grows on the stopped robot; it must not flip the
+    order mid-standoff. The freeze lasts 10 s, then aging can take over."""
+    det = ConflictDetector()
+    me = _state("robot_1", 0, 0, [(5, 5)], t0=0.0)
+    peer = _state("robot_2", 0.2, 0, [(5, 5)], t0=0.0)
+    me.priority_score, peer.priority_score = 0.8, 0.2
+
+    def flags(now):
+        out = det.detect(me, me.intent, {"robot_2": peer}, now=now)
+        return {c.i_have_priority for c in out if c.peer_id == "robot_2"}
+
+    assert flags(0.0) == {True}
+    me.priority_score, peer.priority_score = 0.2, 0.9
+    assert flags(5.0) == {True}
+    assert flags(10.5) == {False}

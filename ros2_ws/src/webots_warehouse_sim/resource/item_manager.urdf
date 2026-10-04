@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!-- Controller description for the invisible item_manager supervisor robot. -->
+<robot name="item_manager">
+  <webots>
+    <plugin type="webots_warehouse_sim.item_manager.ItemManager"/>
+  </webots>
+</robot>

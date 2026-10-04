@@ -157,7 +157,10 @@
           <diffuse>0.1 0.1 0.1 1</diffuse>
         </material>
       </visual>
-      <sensor name="lidar" type="lidar">
+      <sensor name="lidar" type="gpu_lidar">
+        <!-- Publish scans in the URDF "laser_link" frame instead of the
+             scoped "<model>/laser_link/lidar" that is absent from ROS TF. -->
+        <gz_frame_id>laser_link</gz_frame_id>
         <always_on>true</always_on>
         <update_rate>10</update_rate>
         <visualize>true</visualize>

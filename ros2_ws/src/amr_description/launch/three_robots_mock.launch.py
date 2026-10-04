@@ -22,6 +22,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 # start cells are (row, col); mock_robot converts via the same grid convention
@@ -45,6 +46,9 @@ def generate_launch_description():
         DeclareLaunchArgument("coordination_mode", default_value="proposed"),
         DeclareLaunchArgument("enable_tasks", default_value="true"),
         DeclareLaunchArgument("enable_monitor", default_value="true"),
+        DeclareLaunchArgument("webapp", default_value="true"),
+        DeclareLaunchArgument("webapp_host", default_value="127.0.0.1"),
+        DeclareLaunchArgument("webapp_port", default_value="8080"),
     ]
 
     for r in ROBOTS:
@@ -72,7 +76,12 @@ def generate_launch_description():
                 "robot_id": r["id"],
                 "coordination_mode": mode,
                 "use_sim_time": "false",
+                "pose_source": "odom",
                 "grid_yaml": grid,
+                # Spawn pose doubles as the charging dock.
+                "home_x": r["x"],
+                "home_y": r["y"],
+                "home_yaw": r["theta"],
             }.items()))
 
     # Delay the task generator so all three agents have discovered each other
@@ -89,5 +98,19 @@ def generate_launch_description():
         name="fleet_monitor", output="screen", emulate_tty=True,
         condition=IfCondition(monitor),
         parameters=[{"use_sim_time": False, "report_interval_s": 3.0}]))
+
+    ld.append(Node(
+        package="amr_description", executable="fleet_webapp",
+        name="fleet_webapp", output="screen", emulate_tty=True,
+        condition=IfCondition(LaunchConfiguration("webapp")),
+        parameters=[{
+            "use_sim_time": False,
+            "host": LaunchConfiguration("webapp_host"),
+            "port": ParameterValue(LaunchConfiguration("webapp_port"),
+                                   value_type=int),
+            "robot_ids": [r["id"] for r in ROBOTS],
+            "home_xy": [float(r[k]) for r in ROBOTS for k in ("x", "y")],
+            "grid_yaml": grid,
+        }]))
 
     return LaunchDescription(ld)

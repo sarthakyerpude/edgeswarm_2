@@ -17,8 +17,8 @@ project(amr_description)
 # warns against combining ament_python_install_package() with rosidl generation
 # in the same project.
 #
-# The commented-out urdf/meshes install block near the bottom is ready for the
-# robot-model work; uncomment it when those directories exist.
+# Robot descriptions live under config/robot and Gazebo assets under models;
+# both are installed with the package's launch and configuration data.
 # =============================================================================
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -54,6 +54,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TaskBid.msg"
   "msg/TaskAward.msg"
   "msg/TaskComplete.msg"
+  "msg/TaskRelease.msg"
+  "msg/TaskCancel.msg"
+  "msg/NavigationStatus.msg"
   "msg/Conflict.msg"
   "msg/MotionPermit.msg"
   "srv/Replan.srv"
@@ -70,7 +73,13 @@ install(PROGRAMS
   scripts/fleet_agent
   scripts/task_generator
   scripts/fleet_monitor
+  scripts/fleet_dashboard
+  scripts/fleet_webapp
   scripts/mock_robot
+  scripts/rack_labels
+  scripts/hitbox_markers
+  scripts/gen_rack_slots.py
+  scripts/evaluate_benchmarks.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -81,17 +90,13 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
-# --- ROBOT MODEL (not yet present in the repo) -------------------------------
-# amr_description currently contains no urdf/ or meshes/ directory. When the
-# robot-model work lands, uncomment this. Leaving it commented avoids a
-# configure-time error on a directory that does not exist.
-#
-# install(DIRECTORY
-#   urdf
-#   meshes
-#   rviz
-#   DESTINATION share/${PROJECT_NAME}
-# )
+install(DIRECTORY
+  models
+  rviz
+  docs
+  web
+  DESTINATION share/${PROJECT_NAME}
+)
 
 # ------------------------------------------------------ testing -------------
 if(BUILD_TESTING)

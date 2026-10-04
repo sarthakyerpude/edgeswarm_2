@@ -128,3 +128,77 @@ def select_deadlock_victim(cycle: Iterable[str],
         return None
     return max(members,
                key=lambda rid: order_key(scores.get(rid, 0.0), 0, rid))
+
+
+# ============================================================================
+# QUANTIZED PRIORITY LEVEL L (increments 3+4, R1/R5).
+#
+# The continuous score above produced the measured 0.271-vs-0.269 mutual-HOLD:
+# two robots each computed a score a hair above the other's BROADCAST score
+# (waiting-time aging advanced between broadcast and comparison), so each
+# believed it outranked the other and both held. L is integer-valued
+# (1000*C + 100*U + W, exact in float32), so two robots comparing the same
+# two broadcast values always agree, and ties break on robot_id.
+#
+#   C  class 0..4   - what the robot is doing (from the NODE-set task phase,
+#                     never inferred from goal_cell: that inference carried a
+#                     measured 195 s mutual stall)
+#   U  urgency 0..9 - task priority plus deadline aging (R5)
+#   W  wait 0..9    - floor(waiting_time / 10 s), the anti-starvation term
+#
+# Total order: L desc, robot_id asc. legacy priority_score() above is kept
+# for the increment-1 tests and the baseline mode.
+# ============================================================================
+CLASS_IDLE = 0
+CLASS_REPOSITION = 1
+CLASS_TO_PICKUP = 2
+CLASS_CARRYING = 3
+CLASS_STARVED = 4
+STARVE_S = 45.0            # continuous wait that promotes to CLASS_STARVED
+STARVE_CLEAR_M = 0.3       # movement that clears the promotion
+WAIT_STEP_S = 10.0
+AGE_STEPS = (0.5, 0.75, 1.0, 1.25, 1.5)   # age_frac thresholds, one U each
+BUDGET_S = {0: 225.0, 1: 188.0, 2: 150.0, 3: 113.0}
+
+
+def urgency(task_priority: int, age_frac: float) -> int:
+    """0..9: the task's own priority plus one step per AGE_STEPS threshold
+    the task's age fraction (elapsed / budget) has passed."""
+    steps = sum(1 for t in AGE_STEPS if age_frac >= t)
+    return max(0, min(9, int(task_priority) + steps))
+
+
+def level(cls: int, urg: int, wait_s: float) -> float:
+    """L = 1000*C + 100*U + W. Integer-valued, exact in float32."""
+    w = min(9, int(max(0.0, wait_s) // WAIT_STEP_S))
+    return float(1000 * int(cls) + 100 * int(urg) + w)
+
+
+def class_of_score(score: float) -> int:
+    """Recover C from a broadcast L (clamped; a legacy [0,1] score reads 0)."""
+    return max(0, min(4, int(score // 1000)))
+
+
+def outranks(score_a: float, id_a: str, score_b: float, id_b: str) -> bool:
+    """True if (a) outranks (b): L desc, robot_id asc - a TOTAL order."""
+    return (-score_a, id_a) < (-score_b, id_b)
+
+
+def pick_victim(members: Dict[str, float]) -> str:
+    """Deadlock victim: order by (score desc, id asc); the LAST yields
+    (lowest L; on ties the higher robot_id)."""
+    ordered = sorted(members, key=lambda rid: (-members[rid], rid))
+    return ordered[-1]
+
+
+def eff_deadline(task, now: float) -> float:
+    """The deadline used for aging: task.deadline when set, else
+    created_at + BUDGET_S[priority]; +inf when the task has no created_at."""
+    created = getattr(task, "created_at", 0.0) or 0.0
+    if created <= 0.0:
+        return float("inf")
+    dl = getattr(task, "deadline", 0.0) or 0.0
+    if dl > created:
+        return dl
+    prio = max(0, min(3, int(getattr(task, "priority", 0))))
+    return created + BUDGET_S[prio]

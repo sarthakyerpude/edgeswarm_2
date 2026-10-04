@@ -1,10 +1,11 @@
 """
 Distributed mutual exclusion over named capacity-1 zones.
 
-Ricart-Agrawala, with the ordering key changed from pure Lamport timestamp to
-(priority_score, lamport, robot_id). Priority decides first so the fleet makes
-GOOD decisions; Lamport and robot_id make the order TOTAL so it makes
-CONSISTENT ones.
+Ricart-Agrawala. ORDERING KEY (increment 3+): (lamport, robot_id) - PURE
+FIFO. priority_score is still carried on the wire (diagnostics, legacy
+consumers) but NEVER orders or preempts a zone: the sih-57 field runs showed
+a stale-score reorder race producing a double hold, and FIFO plus unlimited
+same-stamp resends bounds every waiter by queue transit instead.
 
 SAFETY INVARIANT
     A robot enters zone Z only after receiving granted=true from EVERY peer
@@ -15,21 +16,37 @@ SAFETY INVARIANT
     that collides when a single packet is lost.
 
 TIMEOUTS EXIST BECAUSE THE NETWORK IS NOT PERFECT
-    A lost grant must never wedge the fleet. Three separate escapes:
-      - no reply from a live peer in T_GRANT   -> resend (up to MAX_RETRIES)
-      - peer goes dead                          -> its grant is no longer required
-      - total acquisition exceeds T_ZONE        -> abandon, penalise, reroute
-"""
-from typing import Callable, Dict, List, Optional, Set
+    A lost grant must never wedge the fleet.
+      - UNRANKED (legacy) zones keep the old escapes: resend up to
+        MAX_RETRIES, then ZoneTimeout after T_ZONE_S -> reroute.
+      - RANKED traffic zones NEVER time out: the SAME request (same req_id,
+        same lamport) is resent every T_GRANT_RESEND_S, unlimited. A fresh
+        lamport is stamped only on a genuinely NEW request, so a waiter
+        keeps its FIFO queue position across resends (the measured 2x60 s
+        acquisition starvation came from timeout + re-request losing it).
 
-from .priority import wins
+LAMPORT-VALIDATED GRANTS (the measured flush/reorder double hold)
+    peer_req_lc[(zone, peer)] records the newest request lamport seen from
+    each peer. A grant whose lamport is below that is stale (sent before the
+    peer's newest request) and is discarded; a peer request newer than a
+    held grant voids that grant. Either delivery order of {flushed grant,
+    new request} therefore leaves at most one holder.
+
+drop_peer() is called by the coordinator ONLY on boot_id change, FAULT or
+GONE (>= 30 s silent) - never on a brief stall: a silent peer keeps every
+hold and grant and remains a required granter (strict partition).
+"""
+import secrets
+from typing import Callable, Dict, List, Optional, Set
 
 FREE, REQUESTING, HELD = "FREE", "REQUESTING", "HELD"
 
 T_GRANT_S = 1.0          # resend a request if a live peer has not replied
+T_GRANT_RESEND_S = 1.0   # ranked zones: same-stamp resend period, unlimited
 MAX_RETRIES = 3
-T_ZONE_S = 10.0          # give up on the zone entirely and reroute
-T_RECLAIM_S = 2.0        # force-release a dead peer's zone after this
+T_ZONE_S = 10.0          # UNRANKED zones only: give up entirely and reroute
+T_RECLAIM_S = 2.0        # superseded by the registry's GONE tier (30 s);
+                         # kept for legacy readers
 
 
 class ZoneTimeout(Exception):
@@ -59,7 +76,17 @@ class ZoneArbiter:
         self.retries: Dict[str, int] = {}
         self.my_key: Dict[str, tuple] = {}         # zone -> (score, lamport, id)
         self.consecutive_wins: Dict[str, int] = {}
-        self._next_req_id = 1
+        # Ranked traffic zones: no ZoneTimeout, same-stamp resend forever.
+        self.ranked: Dict[str, bool] = {}          # zone -> requested as ranked
+        self._last_resend: Dict[str, float] = {}
+        # Lamport validation of grants (see module docstring).
+        self.peer_req_lc: Dict[tuple, int] = {}    # (zone, peer) -> newest req lc
+        self.grant_lc: Dict[tuple, int] = {}       # (zone, peer) -> grant lc held
+        # Zone grants are retained for late joiners. A process-local counter
+        # starting at 1 would collide with a pre-restart grant for this robot
+        # and could falsely satisfy a new mutual-exclusion request. Randomize
+        # the process epoch within the uint32 wire field, then increment it.
+        self._next_req_id = secrets.randbelow(0xFFFFFFFF) + 1
 
         # Diagnostics for your report.
         self.stats = {"requests": 0, "grants_sent": 0, "grants_recv": 0,
@@ -73,12 +100,18 @@ class ZoneArbiter:
 
     # ----------------------------------------------------------- requesting
     def request(self, zone_id: str, my_score: float,
-                t_enter: float, t_exit: float, now: float = 0.0) -> None:
+                t_enter: float, t_exit: float, now: float = 0.0,
+                ranked: bool = False) -> None:
+        """A genuinely NEW request: fresh lamport, fresh req_id, never reused.
+        Resends (lost-message recovery) go through _resend with the SAME
+        stamp, so the FIFO queue position is kept."""
         if self.state.get(zone_id) in (REQUESTING, HELD):
             return                                  # already in progress
         lc = self.tick_clock()
         rid = self._next_req_id
-        self._next_req_id += 1
+        self._next_req_id = (rid + 1) & 0xFFFFFFFF
+        if self._next_req_id == 0:
+            self._next_req_id = 1
 
         self.state[zone_id] = REQUESTING
         self.grants[zone_id] = set()
@@ -86,7 +119,12 @@ class ZoneArbiter:
         self.req_time[zone_id] = now
         self.req_id[zone_id] = rid
         self.retries[zone_id] = 0
+        self.ranked[zone_id] = bool(ranked)
+        self._last_resend[zone_id] = now
         self.my_key[zone_id] = (my_score, lc, self.me)
+        # grant_lc entries belong to my PREVIOUS request for this zone.
+        for key in [k for k in self.grant_lc if k[0] == zone_id]:
+            del self.grant_lc[key]
         self.stats["requests"] += 1
 
         self._send_request(dict(robot_id=self.me, zone_id=zone_id,
@@ -113,12 +151,16 @@ class ZoneArbiter:
         if peer == self.me:
             return                                  # my own broadcast
 
-        self.tick_clock(int(msg.get("lamport_ts", 0)))
+        lc_msg = int(msg.get("lamport_ts", 0))
+        self.tick_clock(lc_msg)
+        # Newest-request bookkeeping: any grant from `peer` older than this
+        # lamport is stale from now on (see on_grant).
+        if lc_msg > self.peer_req_lc.get((zid, peer), -1):
+            self.peer_req_lc[(zid, peer)] = lc_msg
         st = self.state.get(zid, FREE)
 
         if st == HELD:
-            self.deferred.setdefault(zid, []).append((peer, int(msg.get("req_id", 0))))
-            self.stats["deferrals"] += 1
+            self._defer(zid, peer, int(msg.get("req_id", 0)))
             return
 
         # -------------------------------------------------------------------
@@ -140,21 +182,60 @@ class ZoneArbiter:
         if st == REQUESTING and relevant_peers is not None:
             have = self.grants.get(zid, set())
             if relevant_peers.issubset(have):
-                self.deferred.setdefault(zid, []).append((peer, int(msg.get("req_id", 0))))
-                self.stats["deferrals"] += 1
+                self._defer(zid, peer, int(msg.get("req_id", 0)))
                 return
 
+        # -------------------------------------------------------------------
+        # OVERTAKEN-GRANT VOID (lamport-validated grants). A request from
+        # `peer` NEWER than the grant I hold from it means that grant was
+        # flushed/reordered on its side: it is void. The grant-order check
+        # below then no longer applies to this peer, and the FIFO comparison
+        # decides. Because the peer's clock at grant time was already past my
+        # request's lamport, its new request always loses the FIFO compare,
+        # so I defer it and wait for its (re-)grant - at most one holder,
+        # whatever the delivery order (the measured 0.15 s jitter race).
+        # -------------------------------------------------------------------
+        if (st == REQUESTING and peer in self.grants.get(zid, set())
+                and lc_msg > self.grant_lc.get((zid, peer), 1 << 62)):
+            self.grants[zid].discard(peer)
+            self.grant_lc.pop((zid, peer), None)
+            self.stats["grants_voided"] = self.stats.get("grants_voided", 0) + 1
+            if self.log:
+                self.log(f"ZONE {zid}: grant from {peer} overtaken by its "
+                         f"newer request (lc {lc_msg}) - voided")
+
+        # -------------------------------------------------------------------
+        # GRANT-ORDER CHECK - a peer that has already granted my CURRENT
+        # request (and has NOT overtaken that grant: this is a resend of the
+        # request from before its grant) is ordered after me. Defer it and
+        # grant on release.
+        # -------------------------------------------------------------------
+        if st == REQUESTING and peer in self.grants.get(zid, set()):
+            self._defer(zid, peer, int(msg.get("req_id", 0)))
+            return
+
         if st == REQUESTING and i_need_zone:
-            their = (float(msg["priority_score"]), int(msg["lamport_ts"]), peer)
+            # PURE FIFO: (lamport, robot_id). priority_score is carried on
+            # the wire but never orders a zone (stale-score races).
             mine = self.my_key.get(zid, (0.0, 0, self.me))
-            if wins(their, mine):
-                self._grant(peer, zid, msg["req_id"])   # they beat me
+            if (lc_msg, peer) < (mine[1], self.me):
+                self._grant(peer, zid, msg["req_id"])   # they asked first
             else:
-                self.deferred.setdefault(zid, []).append((peer, int(msg.get("req_id", 0))))
-                self.stats["deferrals"] += 1
+                self._defer(zid, peer, int(msg.get("req_id", 0)))
             return
 
         self._grant(peer, zid, msg["req_id"])
+
+    def _defer(self, zone_id: str, peer: str, req_id: int) -> None:
+        """Queue a deferred grant, keeping only the peer's NEWEST request.
+
+        A peer that timed out and re-requested has a new req_id; a grant sent
+        against the stale id would be discarded by its on_grant req_id check.
+        """
+        queue = self.deferred.setdefault(zone_id, [])
+        queue[:] = [(p, r) for p, r in queue if p != peer]
+        queue.append((peer, req_id))
+        self.stats["deferrals"] += 1
 
     def _grant(self, requester: str, zone_id: str, req_id: int) -> None:
         lc = self.tick_clock()
@@ -171,9 +252,20 @@ class ZoneArbiter:
         # Ignore a late reply to a request we already abandoned.
         if msg.get("req_id") != self.req_id.get(zid):
             return
-        self.tick_clock(int(msg.get("lamport_ts", 0)))
+        lc = int(msg.get("lamport_ts", 0))
+        self.tick_clock(lc)
+        granter = msg["granter_id"]
+        # Lamport validation: a grant older than the granter's newest request
+        # for this zone was flushed before it re-requested - stale, discard.
+        if lc < self.peer_req_lc.get((zid, granter), 0):
+            self.stats["grants_stale"] = self.stats.get("grants_stale", 0) + 1
+            if self.log:
+                self.log(f"ZONE {zid}: stale grant from {granter} "
+                         f"(lc {lc} < its newest request) - discarded")
+            return
         if msg.get("granted", False):
-            self.grants.setdefault(zid, set()).add(msg["granter_id"])
+            self.grants.setdefault(zid, set()).add(granter)
+            self.grant_lc[(zid, granter)] = lc
             self.stats["grants_recv"] += 1
 
     # -------------------------------------------------------------- entering
@@ -197,10 +289,29 @@ class ZoneArbiter:
                 self.log(f"ZONE HELD {zone_id} (grants from {sorted(got)})")
             return True
 
+        if self.ranked.get(zone_id):
+            # Ranked traffic zones NEVER time out and never re-stamp: the
+            # SAME (req_id, lamport) goes out every T_GRANT_RESEND_S so a
+            # lost message cannot cost the FIFO queue position. The wait is
+            # bounded by queue transit, and the coordinator's acquisition
+            # timeout (20 s) re-enables the deadlock backstop above that.
+            last = self._last_resend.get(zone_id, now)
+            if now - last >= T_GRANT_RESEND_S:
+                self._last_resend[zone_id] = now
+                self.stats["resends"] = self.stats.get("resends", 0) + 1
+                self._resend(zone_id)
+            return False
+
         elapsed = now - self.req_time.get(zone_id, now)
         if elapsed > T_ZONE_S:
             self.stats["timeouts"] += 1
             self.state[zone_id] = FREE
+            self.grants.pop(zone_id, None)
+            # Flush the deferred queue BEFORE abandoning: release() early-
+            # returns once state is FREE, so without this every peer we
+            # deferred is black-holed into its own full T_ZONE_S timeout.
+            for peer, peer_req_id in self.deferred.pop(zone_id, []):
+                self._grant(peer, zone_id, peer_req_id)
             raise ZoneTimeout(zone_id)
 
         if elapsed > T_GRANT_S * (self.retries.get(zone_id, 0) + 1):
@@ -230,6 +341,10 @@ class ZoneArbiter:
             return
         self.state[zone_id] = FREE
         self.grants.pop(zone_id, None)
+        self.ranked.pop(zone_id, None)
+        self._last_resend.pop(zone_id, None)
+        for key in [k for k in self.grant_lc if k[0] == zone_id]:
+            del self.grant_lc[key]
         for peer, peer_req_id in self.deferred.pop(zone_id, []):
             self._grant(peer, zone_id, peer_req_id)
         if self.log:
@@ -246,9 +361,20 @@ class ZoneArbiter:
             self.release(zid)
 
     def drop_peer(self, peer_id: str) -> None:
-        """A peer died: stop waiting for its grant and discard its deferrals."""
+        """Discard a peer's grants and deferred requests.
+
+        Call ONLY on boot_id change, FAULT, or GONE (>= 30 s silent). A peer
+        that is merely stale/silent keeps its grants and deferrals: it may
+        still be physically inside a zone (strict partition, sih-57 case).
+        """
+        for granters in self.grants.values():
+            granters.discard(peer_id)
         for zid in list(self.deferred.keys()):
             self.deferred[zid] = [entry for entry in self.deferred[zid] if entry[0] != peer_id]
+        for key in [k for k in self.grant_lc if k[1] == peer_id]:
+            del self.grant_lc[key]
+        for key in [k for k in self.peer_req_lc if k[1] == peer_id]:
+            del self.peer_req_lc[key]
 
     def held_zones(self) -> List[str]:
         return [z for z, s in self.state.items() if s == HELD]
