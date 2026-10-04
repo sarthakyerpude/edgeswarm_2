@@ -89,7 +89,19 @@ controller_server:
       # and placed by the planner where the swept disc fits). 1.2 rad/s
       # keeps the spin well inside the smoother's 2.0 rad/s / 3.2 rad/s^2.
       use_rotate_to_heading: true
-      rotate_to_heading_min_angle: 0.5
+      # 0.9 rad (52 deg), raised from 0.5 (webots_live_final diagnosis): the
+      # segment-END spins come from rotateToGoalHeading (active within the
+      # goal xy tolerance regardless of this threshold) and segment STARTS
+      # after a turn/BackUp are misaligned ~90 deg+, so the rectilinear turn
+      # model keeps all its spins. What 0.5 broke: a robot pressed to ~0.2 m
+      # of a rack face (belief-truth drift at the measured sigma 0.2-0.43)
+      # needs a <= 45 deg heading correction to escape, and at 0.5 RPP
+      # SPUN first - which the 0.33 m rotation polygon rightly vetoes that
+      # close to a face - so the robot could neither spin nor drive (the
+      # rack-3 EB wedge cluster, 7 wedges/14 StopZone stops). At 0.9 those
+      # corrections ARC in the slow band (curvature regulation caps v at
+      # ~0.1 m/s, 0.30 m box), which the face clearance allows.
+      rotate_to_heading_min_angle: 0.9
       rotate_to_heading_angular_vel: 1.2
       # Shorter, velocity-scaled lookahead: segments are straight lines, so
       # a long carrot buys nothing - it only cut the remaining gentle 45 deg
@@ -374,16 +386,25 @@ collision_monitor:
       type: scan
       topic: scan
 
+# bond_timeout 12 s (was the 4 s default): under host load 50+ the bond
+# heartbeats starve and the watchdog fired "CRITICAL FAILURE:
+# collision_monitor IS DOWN after not receiving a heartbeat" mid-run,
+# RESETTING the managed nodes while robots were in traffic
+# (webots_live_final). A slow heartbeat is strictly safer than a mid-traffic
+# reset (the velocity gate and collision monitor fail closed); bonds stay
+# ENABLED so a truly dead node is still caught, just with load tolerance.
 lifecycle_manager_localization:
   ros__parameters:
     use_sim_time: true
     autostart: true
+    bond_timeout: 12.0
     node_names: [map_server, amcl]
 
 lifecycle_manager_navigation:
   ros__parameters:
     use_sim_time: true
     autostart: true
+    bond_timeout: 12.0
     node_names: [controller_server, smoother_server, planner_server, route_server,
                  behavior_server, velocity_smoother, collision_monitor,
                  bt_navigator, waypoint_follower, docking_server]

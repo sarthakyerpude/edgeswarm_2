@@ -72,6 +72,17 @@ STUCK_BLOCKER_RADIUS_M = 1.2
 STUCK_SELF_RECOVER_S = 5.0
 STUCK_BLOCK_AHEAD_M = 0.6
 STUCK_RECOVER_COOLDOWN_S = 10.0
+# PHANTOM HOLD (webots_live_final residual): the robot is held with GO, no
+# peer to blame, and the BELIEVED nose ray is clear - but the TRUE pose is
+# pressed near a face the collision monitor sees (belief-truth drift hit
+# 0.28 m live; design point sigma 0.30). The believed map cannot explain the
+# hold, so after this longer patience the same blocked-ahead replan runs
+# anyway: shifting the plan one row/col away from wherever the unseen
+# obstruction is breaks the stop-retry loop (the rack-3 EB and rack-6 NB
+# wedge clusters, 7 wedges live). Longer than every legitimate zero-motion
+# GO spell (segment spins ~2 s, SLOW-scaled 180s ~8 s) and shorter than the
+# bridge's 2-abort BackUp cycle (~20 s).
+STUCK_PHANTOM_S = 12.0
 # Self-recovery precondition: the hold must be EXPLAINED by static geometry -
 # a wall/rack within the collision monitor's forward reach (0.45 m StopZone
 # + 0.20 m nose) of the robot's nose cone. Without it, a follower hiccup in
@@ -983,7 +994,12 @@ class FleetCoordinator:
                 elif (now - self._progress_t > STUCK_SELF_RECOVER_S
                       and self.goal_cell is not None
                       and self._retreat is None
-                      and self._static_ahead_m() < STUCK_STATIC_AHEAD_M):
+                      and (self._static_ahead_m() < STUCK_STATIC_AHEAD_M
+                           or now - self._progress_t > STUCK_PHANTOM_S)):
+                    # Seen obstruction (believed nose ray hits a face) after
+                    # 5 s, or a PHANTOM hold (belief clear, physics stopped:
+                    # belief-truth drift pressed the true body to a face the
+                    # collision monitor sees) after 12 s.
                     permit = self._stuck_self_recover(now)
         else:
             self._progress_xy = None
@@ -1911,9 +1927,12 @@ class FleetCoordinator:
                 break
         saved = (list(self.path), self.intent)
         if ahead and self.replan(now=now, extra_blocked=ahead):
+            seen = self._static_ahead_m() < STUCK_STATIC_AHEAD_M
             self.log(f"stuck with GO ({now - (self._progress_t or now):.1f}s,"
-                     f" nobody to blame): replanned away from the static "
-                     f"obstruction ({len(ahead)} cells blocked)")
+                     f" nobody to blame, "
+                     f"{'face in the nose ray' if seen else 'phantom hold'})"
+                     f": replanned away from the obstruction "
+                     f"({len(ahead)} cells blocked)")
             self._progress_xy = None        # fresh window for the new route
             self._progress_t = None
             return safety.most_restrictive(
@@ -1939,8 +1958,15 @@ class FleetCoordinator:
             return None
         if now - self._peer_still_since.get(rid, now) < T_OVERTAKE_S:
             return None
-        if getattr(st, "status", "") in (WAITING, YIELDING):
-            return None     # queued/yielding: it will move; not a parked car
+        # Queue vs wreck: a robot WAITING ON SOMEONE (waiting_for set) is a
+        # queue member and will move; a robot YIELDING is mid-manoeuvre.
+        # But a robot WAITING on NOBODY is the self-stuck wreck class (the
+        # phantom-hold recovery downgrades a wall-held GO robot to exactly
+        # this state) - after T_OVERTAKE_S stationary it is a parked car.
+        if (getattr(st, "status", "") == YIELDING
+                or (getattr(st, "status", "") == WAITING
+                    and (getattr(st, "waiting_for", "") or ""))):
+            return None
         if (now < self._ot_cooldown_until.get(rid, 0.0)
                 or now - self._ot_last_try < OVERTAKE_RETRY_S):
             return None

@@ -125,10 +125,14 @@ def test_wall_stuck_go_robot_replans_then_becomes_waiting():
                    for m in logs)), logs[-8:]
 
 
-def test_open_ground_frozen_go_robot_does_not_self_recover():
-    """Guard: with nothing static in the nose cone a GO stall is a follower
-    problem (Nav2's own progress/BackUp machinery), not a planner one - no
-    spurious replans, no phantom WAITING."""
+def test_open_ground_frozen_go_robot_waits_for_the_phantom_patience():
+    """With nothing static in the believed nose cone, a GO stall is first
+    the follower's problem: NO replan before STUCK_PHANTOM_S (segment spins
+    and SLOW-scaled turns are zero-translation GO spells of up to ~8 s).
+    Past it, the hold is a PHANTOM (belief clear, physics stopped - the
+    live rack-3/rack-6 wedge class, where belief-truth drift pressed the
+    true body to a face the believed map cannot see) and the blocked-ahead
+    replan must run anyway."""
     grid = GridMap.from_yaml(GRID_YAML)
     c = FleetCoordinator("robot_1", grid, lambda d: None, lambda d: None)
     c.state.pose = Pose2D(0.45, -2.0, math.pi / 2)    # open spine mouth
@@ -137,11 +141,61 @@ def test_open_ground_frozen_go_robot_does_not_self_recover():
     c.log = logs.append
     assert c.set_goal((88, 94), now=NOW)
     t = NOW
-    while t < NOW + 12.0:
+    while t < NOW + 11.5:
         p = c.tick(t)
         t = round(t + 0.5, 1)
     assert p.action in ("GO", "SLOW")
-    assert not any("stuck with GO" in m for m in logs)
+    assert not any("stuck with GO" in m for m in logs), \
+        "no spurious replan inside the phantom patience"
+    while t < NOW + 20.0:
+        c.tick(t)
+        t = round(t + 0.5, 1)
+    assert any("stuck with GO" in m and "phantom hold" in m for m in logs), \
+        logs[-6:]
+
+
+def _phantom_cluster_case(pose, goal, name):
+    """Live wedge-cluster regression core: frozen GO robot at the measured
+    believed pose, believed nose ray CLEAR (that is what made the old
+    machinery blind), must phantom-replan by STUCK_PHANTOM_S + a tick and
+    end up with a different path or a WAITING downgrade."""
+    grid = GridMap.from_yaml(GRID_YAML)
+    c = FleetCoordinator("robot_1", grid, lambda d: None, lambda d: None)
+    c.state.pose = pose
+    c.state.loc_sigma_lat = 0.26
+    logs = []
+    c.log = logs.append
+    assert c.set_goal(goal, now=NOW), name
+    assert c._static_ahead_m() >= 0.65, (
+        name, "precondition: the believed nose ray is clear - the hold is "
+              "invisible to the seen-obstruction trigger")
+    first = list(c.path)
+    t, actions = NOW, []
+    while t < NOW + 16.0:
+        actions.append(c.tick(t).action)
+        t = round(t + 0.5, 1)
+    assert any("phantom hold" in m for m in logs), (name, logs[-6:])
+    assert list(c.path) != first or "STOP" in actions, name
+
+
+def test_live_cluster_rack3_eb_wedge_phantom_recovers():
+    """webots_live_final cluster B: robot_2 held at believed (-2.93, 1.45,
+    -7 deg) beside rack 3's north face (true clearance 0.21) for 5 wedges /
+    8 StopZone stops across three L3->east trips. Believed ray at -7 deg
+    exits the 0.65 m window above the face, so only the phantom trigger can
+    see it."""
+    _phantom_cluster_case(Pose2D(-2.93, 1.45, math.radians(-7)), (22, 60),
+                          "rack3_eb")
+
+
+def test_live_cluster_rack6_nb_entry_phantom_recovers():
+    """webots_live_final cluster A: robot_2/robot_1 held at believed
+    ~(0.46, -1.8, 80 deg) entering the rack-5/6 gap northbound (true pose
+    0.13-0.17 east of belief, 0.18-0.25 from rack 6's west face). The
+    believed ray runs up the free gap, so again only the phantom trigger
+    fires."""
+    _phantom_cluster_case(Pose2D(0.46, -1.80, math.radians(80)), (88, 25),
+                          "rack6_nb")
 
 
 def test_fleet_sim_wall_stuck_robot_becomes_actionable_within_15s():

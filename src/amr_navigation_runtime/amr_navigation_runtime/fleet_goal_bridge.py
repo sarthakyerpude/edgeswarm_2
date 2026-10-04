@@ -137,6 +137,7 @@ class FleetGoalBridge(Node):
         # Own map-frame pose from the fleet heartbeat (10 Hz), used to start
         # every goal where the robot is - see path_trim.py.
         self._robot_xy = None
+        self._robot_status = ''
         self._robot_xy_t = 0.0
         self.create_subscription(RobotState, '/fleet/robot_state',
                                  self._on_state, STATE_QOS)
@@ -153,6 +154,7 @@ class FleetGoalBridge(Node):
     def _on_state(self, msg):
         if msg.robot_id == str(self.get_parameter('robot_id').value).strip('/'):
             self._robot_xy = (msg.pose.x, msg.pose.y)
+            self._robot_status = msg.status
             self._robot_xy_t = time.monotonic()
 
     def _goal_path(self, route):
@@ -376,7 +378,16 @@ class FleetGoalBridge(Node):
                 moved = (math.hypot(self._robot_xy[0] - self._goal_start_xy[0],
                                     self._robot_xy[1] - self._goal_start_xy[1])
                          if self._robot_xy and self._goal_start_xy else None)
+                # A no-progress abort while the FLEET itself holds the
+                # robot (velocity gate zeroing cmd_vel under a WAITING /
+                # YIELDING permit) is not a wedge - it is Nav2's progress
+                # checker timing out a legitimate coordination wait, and
+                # backing up out of a queue slot helps nobody (robot_3
+                # t=104 / robot_1 t=113, webots_live_final: both 'wedges'
+                # at 0.5-1.6 m of face clearance during fleet stops).
+                fleet_held = self._robot_status in ('WAITING', 'YIELDING')
                 if (result.status == GoalStatus.STATUS_ABORTED
+                        and not fleet_held
                         and moved is not None and moved < WEDGE_MOVED_M):
                     self._wedged_aborts += 1
                 else:

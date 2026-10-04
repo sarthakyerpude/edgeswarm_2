@@ -117,19 +117,27 @@ def _turn_points(path):
 
 
 ROTATION_POLY_R = 0.33      # nav2 collision monitor rotation band, vertices
+# Fleet design point for localization drift (live AMCL error reached 0.28 m):
+# a FULL spin must fit disc 0.286 + sqrt(2)*sigma at sigma 0.30.
+SIGMA_DESIGN = 0.30
+FULL_SPIN_CLEAR_M = 0.286 + math.sqrt(2.0) * SIGMA_DESIGN   # 0.710
 
 
 def test_every_planned_turn_point_fits_the_spin():
     """THE guarantee of the rectilinear model, two grades:
 
     - a FULL spin (> 60 deg residual after the approach step): the swept
-      rotation grown by the sigma-floor share must touch no static cell
-      (these are the junction/turnaround pivots - the planner's turn
-      shaping places them on >= 0.55 m ground);
+      rotation grown by the sigma-floor share must touch no static cell,
+      AND the pivot's static clearance must hold the DESIGN-POINT sweep
+      disc 0.286 + sqrt(2)*0.30 = 0.71 m (live AMCL error reached 0.28 m,
+      so spins must survive sigma 0.30, not just the floor) - these pivots
+      are the junction-box middles (~0.75 m);
     - a residual ALIGNMENT nudge (<= 60 deg, i.e. the corner was approached
       through a 45 deg jog): legal wherever the collision monitor's 0.33 m
       rotation polygon fits - which includes the engineered 0.35 m lane
-      lines, the fleet's baseline geometry for merges."""
+      lines. This regime CANNOT hold sigma 0.30 by geometry (the lanes are
+      0.35 m from faces); there the collision monitor's speed bands + the
+      arcing recovery (rotate_to_heading_min_angle 0.9) own the margin."""
     clr = GRID.clearance_m()
     for a, b in TRIPS:
         for trip in ((a, b), (b, a)):
@@ -145,6 +153,9 @@ def test_every_planned_turn_point_fits_the_spin():
                                  if not GRID.is_static_free(c))
                     assert not bad, (trip, cell, round(h_in, 2),
                                      round(h_out, 2), bad[:4])
+                    assert clr[cell[0]][cell[1]] >= FULL_SPIN_CLEAR_M - 0.02, (
+                        trip, cell, round(clr[cell[0]][cell[1]], 2),
+                        "full spin pivot must hold the sigma-0.30 sweep")
                 else:
                     assert clr[cell[0]][cell[1]] >= ROTATION_POLY_R + 0.01, (
                         trip, cell, round(clr[cell[0]][cell[1]], 2))

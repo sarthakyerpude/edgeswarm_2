@@ -90,7 +90,14 @@ NEIGHBOURS = [(-1, 0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
 # Both terms fade with the goal taper (station/dock goals legitimately sit
 # 0.4-0.45 m from faces) and stay far below LANE_WRONG_SIDE_HARD, so lane
 # direction always dominates route choice.
-TURN_CLEAR_M = 0.55        # >= 90 deg: disc 0.286 + sigma 0.07 + overshoot
+# >= 90 deg corners (the rectilinear model's in-place SPINS): sized at the
+# fleet's measured-worst localization design point sigma = 0.30 (live AMCL
+# error reached 0.28 m): spin disc 0.286 + sqrt(2)*0.30 = 0.71. Junction-box
+# middles offer ~0.75 m, so full spins land there; dead-end turnaround
+# pivots (~0.55-0.65) keep a small permanent deficit - an unavoidable
+# constant per U-turn trip, while the runtime uturn_gate still scales with
+# the LIVE sigma (floor need 0.357) and relocates the turn when degraded.
+TURN_CLEAR_M = 0.71
 # A single 45 deg step only swings the nose by the spin disc + sigma
 # (~0.36 m): it needs less room than a full corner, and charging it more
 # than the ENGINEERED 0.35 m lane-line clearance made every merge onto a

@@ -11,5 +11,5 @@ ros2_ws/
 *.csv
 # docs live in the project wiki; only SETUP.md is kept in-repo
 *.md
-!SETUP.md
-!README.md
+!/SETUP.md
+!/README.md
