@@ -11,7 +11,9 @@ if [ ! -f /opt/ros/jazzy/setup.bash ]; then
   echo "  https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html"
   exit 1
 fi
+set +u
 source /opt/ros/jazzy/setup.bash
+set -u
 
 echo "== 2/4 Installing packages (sudo apt)"
 sudo apt update
@@ -24,7 +26,9 @@ sudo apt install -y \
 
 echo "== 3/4 Building the workspace"
 colcon build --symlink-install
+set +u
 source install/setup.bash
+set -u
 echo "Build OK."
 
 echo "== 4/4 Windows-side steps (do these once, outside WSL)"
