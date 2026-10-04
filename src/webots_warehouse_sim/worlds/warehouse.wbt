@@ -335,6 +335,53 @@ Solid {
   boundingObject USE LM_FIN_S_BOX
 }
 
+# ---- round-3 landmarks (loc_validate2): round 2 fixed its fin-equipped
+# regions (aisle A east mean 0.08, south/docks 0.00) and the residual
+# along-track error sat exactly in the two regions the SP_* zone rects had
+# kept fin-less (aisle A west mean 0.18, aisle N east mean 0.24). The rects
+# were therefore trimmed (R12, warehouse_grid.yaml) to exclude ONLY the
+# never-drivable |x| >= 5.8 wall band, and these fins complete the set:
+# every aisle end now carries a distinct signature. Same rules as round 2:
+# wall band only, >= 0.3 m chamfer from the col-3/116 approach cells,
+# distinct (width, y-offset) per aisle and per end:
+#   west ends: N 0.2 wide at band start (y 3.4-3.6, extends the row-1
+#     endcap), A 0.2 wide mid-band (y 1.9-2.1), B 0.3 wide (y -0.3-0.0);
+#   east ends: N 0.4 wide high (y 4.1-4.5), A 0.3 wide (y 1.9-2.2),
+#     B 0.2 wide (y -0.3..-0.1).
+Solid {
+  translation -5.9 3.5 0.6
+  name "landmark_end_n_w"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_END_N_W_BOX Box { size 0.2 0.2 1.2 }
+    }
+  ]
+  boundingObject USE LM_END_N_W_BOX
+}
+Solid {
+  translation 5.9 4.3 0.6
+  name "landmark_end_n_e"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_END_N_E_BOX Box { size 0.2 0.4 1.2 }
+    }
+  ]
+  boundingObject USE LM_END_N_E_BOX
+}
+Solid {
+  translation -5.9 2.0 0.6
+  name "landmark_end_a_w"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_END_A_W_BOX Box { size 0.2 0.2 1.2 }
+    }
+  ]
+  boundingObject USE LM_END_A_W_BOX
+}
+
 # ---- visual-only markers (no collision) ------------------------------------
 Pose {
   translation 0 2.0 0.006

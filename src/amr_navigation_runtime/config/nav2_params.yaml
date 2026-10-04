@@ -4,10 +4,10 @@
 # section under the robot's namespace - one edit tunes robot_1/2/3 alike).
 # Measured problem (webots_remeasure, 1 Hz believed-vs-true trace, n=927):
 # AMCL error mean 0.18 m / max 0.46 m at 0.6-1.0 m/s in the 1.6 m aisles,
-# because the R7-equalized warehouse is lidar-self-similar. Three landmark_*
-# solids now break that symmetry (warehouse.wbt + warehouse_map.pgm); the
-# parameters below make the filter actually exploit them and recover from
-# the residual in-aisle aliasing.
+# because the R7-equalized warehouse is lidar-self-similar. Ten landmark_*
+# solids now break that symmetry (warehouse.wbt + warehouse_map.pgm; rounds
+# 1-3: south floor, aisle dead ends, south wall); the parameters below make
+# the filter actually exploit them and recover from residual aliasing.
 amcl:
   ros__parameters:
     use_sim_time: true
@@ -24,13 +24,23 @@ amcl:
     # 3000 is only paid during recovery bursts.
     min_particles: 500
     max_particles: 3000
-    # likelihood_field -> likelihood_field_prob: plain likelihood_field
-    # IGNORES the do_beamskip block below. The _prob variant scores with
-    # beamskip, which drops beams that disagree with the map across most of
-    # the cloud - i.e. the peer robots sharing the 1.6 m corridors (their
-    # 0.04 m lidar posts are unmapped) stop dragging the pose while mapped
-    # structure (racks, walls, landmarks) keeps its full weight.
-    laser_model_type: likelihood_field_prob
+    # ROUND 3 REVERT (loc_validate2 forensics): likelihood_field_prob was
+    # chosen in round 1 for its beamskip, but beamskip is a LOCK-IN
+    # mechanism in a self-similar map. Measured anatomy (r3, t=138-162):
+    # southbound through the aisle-B crossing with a peer in the corridor,
+    # the cloud snapped to an along-track alias; from the wrongly-converged
+    # cloud's consensus, MOST beams still matched the (self-similar)
+    # racks/walls - so the beam_skip_error_threshold 0.9 full-update
+    # override never armed - while the FEW disambiguating beams (landmark
+    # faces, rack corners) disagreed by > beam_skip_distance for > 30% of
+    # particles and were SKIPPED: the filter deleted exactly the evidence
+    # that could pull it back, and rode a 0.84 -> 1.16 m divergence at
+    # sigma 0.02-0.06 (overconfident) for 20 s until recovery injection
+    # finally fired. Back to the classic likelihood_field: its summed
+    # pz^3 weighting is also gentler on the 1-2 unmapped peer-post beams
+    # per scan (a peer at scan height is only a 0.04 m lidar post; z_rand
+    # 0.10 absorbs it) than the _prob product model.
+    laser_model_type: likelihood_field
     # 0.10/0.10 -> 0.05/0.05: at 1.0 m/s cruise 0.10 m already updated every
     # scan, but the wedges happen in the SLOW approaches beside rack faces
     # (<= 0.25 m/s) where 0.10 m meant <= 2.5 corrections/s while belief
@@ -69,14 +79,13 @@ amcl:
     tf_broadcast: true
     set_initial_pose: false
     always_reset_initial_pose: false
-    # Active now that laser_model_type is likelihood_field_prob (see above).
-    # 0.5 m mismatch tolerance never skips the gradual-drift correction
-    # (error grows from < 0.1 m between updates) and never skips landmark
-    # beams of a converged cloud; a beam is only dropped when > 30% of the
-    # cloud disagrees with the map by > 0.5 m (a peer robot mid-corridor).
-    # If > 90% of beams would be skipped the full scan is used instead
-    # (beam_skip_error_threshold) so a truly lost filter still measures.
-    do_beamskip: true
+    # OFF since round 3 (and inert anyway under likelihood_field): see the
+    # laser_model_type note - beamskip skipped exactly the scarce
+    # disambiguating beams once the cloud had aliased, because in this
+    # warehouse an aliased cloud still matches most of the (self-similar)
+    # geometry and the >90% error override never arms. The beam_skip_*
+    # values are kept only as documentation of the attempted tuning.
+    do_beamskip: false
     beam_skip_distance: 0.5
     beam_skip_threshold: 0.3
     beam_skip_error_threshold: 0.9
@@ -104,15 +113,20 @@ amcl:
     z_short: 0.05
     z_max: 0.05
     z_rand: 0.10
-    # 0.2 -> 0.10: the sharper hit kernel is what converts the landmarks
-    # into accuracy. At sigma 0.2 a 0.2 m pose offset cost a beam only ~1
-    # sigma - the likelihood surface was too flat to separate the aliased
-    # x-offsets (measured mean error 0.18 m ~= the old sigma). At 0.10 a
-    # 0.2 m offset is 2 sigma per beam and the target regime (max <= 0.25 m,
-    # mean <= 0.12 m) sits inside the kernel's discriminating range.
-    # Overconfidence on a wrong mode is covered by resample_interval 2 +
-    # the recovery injection above.
-    sigma_hit: 0.10
+    # 0.2 -> 0.10 (round 1) -> 0.12 (round 3): the sharp kernel converts the
+    # landmarks into accuracy (at the original 0.2 the surface was too flat
+    # to separate the aliased x-offsets; measured mean error 0.18 m ~= the
+    # old sigma), but 0.10 proved overconfident: r3 rode a growing alias at
+    # sigma_xy 0.02-0.06 because the sharp kernel makes the wrong unimodal
+    # peak look certain, and each unmapped peer-post beam weighs
+    # e^-(d/sigma)^2/2 - at 0.10 heavy enough to shove the pose toward
+    # "explaining" the peer as a rack face (the lateral dy 0.32-0.43
+    # residuals). At 0.12: the gate target max 0.25 m is still 2.1 sigma
+    # (per-beam weight ratio ~9x, discriminating), the end fins' 0.1 m map
+    # step is 0.83 sigma per beam (readable across the 3-5 end-aperture
+    # beams x ~20 updates/metre), while a peer post 0.3 m off a mapped face
+    # drops to e^-3.1 ~ 0.04 + the z_rand floor (absorbed, not steering).
+    sigma_hit: 0.12
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
     robot_model_type: nav2_amcl::DifferentialMotionModel

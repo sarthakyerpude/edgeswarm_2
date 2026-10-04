@@ -226,7 +226,8 @@ def test_landmarks_match_yaml_and_stay_off_routes(cfg, gm):
     furniture cell and station/dock A* route, keeping >= 0.35 m from every
     routed line (the fleet-wide lane-to-face minimum)."""
     boxes = sorted(_wbt_landmark_footprints())
-    assert len(boxes) == 7, "expected 7 landmarks (3 south-floor + 4 round-2)"
+    assert len(boxes) == 10, \
+        "expected 10 landmarks (3 south-floor + 4 round-2 + 3 round-3)"
     ycfg = sorted((lm["x_min"], lm["x_max"], lm["y_min"], lm["y_max"])
                   for lm in cfg["landmarks"])
     assert _same(boxes, ycfg)

@@ -39,7 +39,10 @@ BOXES += [(1.2, 1.5, -4.7, -4.4),     # landmark_pillar_se
           (5.8, 6.0, 1.9, 2.2),       # landmark_end_a_e (round 2)
           (-6.0, -5.8, -0.3, 0.0),    # landmark_end_b_w
           (5.8, 6.0, -0.3, -0.1),     # landmark_end_b_e
-          (-1.9, -1.3, -5.0, -4.8)]   # landmark_fin_s
+          (-1.9, -1.3, -5.0, -4.8),   # landmark_fin_s
+          (-6.0, -5.8, 3.4, 3.6),     # landmark_end_n_w (round 3)
+          (5.8, 6.0, 4.1, 4.5),       # landmark_end_n_e
+          (-6.0, -5.8, 1.9, 2.1)]     # landmark_end_a_w
 
 
 def cast(a):

@@ -241,11 +241,17 @@ class ItemManager:
                     f'sigma_xy={b["sigma_xy"]:.2f}m '
                     f'amcl_age={now - b["stamp"]:.1f}s '
                     f'true_now=({x:.2f},{y:.2f})')
+            # The '[loc]' sample is emitted UNCONDITIONALLY (round-3 fix):
+            # it used to be replaced by the DIVERGED warning above 0.5 m, so
+            # any [loc]-based trace extraction lost a robot exactly while it
+            # was diverged (loc_validate2: robot_3's [loc] stream ended at
+            # t=138 as it entered its divergence - 62 of ~300 samples). The
+            # warning is now ADDITIONAL, so all three robots are measured
+            # for the full run no matter their error.
+            self.__log.info(f'[loc] {line}')
             if b['err'] > DIVERGE_WARN_M:
                 self.__log.warning(
                     f'LOCALIZATION DIVERGED {rid} err={b["err"]:.2f}m | {line}')
-            else:
-                self.__log.info(f'[loc] {line}')
 
     def __free_item_near(self, xy):
         best, best_d = None, 0.35

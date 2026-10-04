@@ -155,8 +155,11 @@ SPAWNS = [("robot_1", -3.0, -4.0), ("robot_2", 0.0, -4.0), ("robot_3", 3.0, -4.0
 # SPINE (35,50,87,69), rack rows 46-51/61-66/82-87; --legacy runs on the old
 # map are scored against the R7 rects below.
 PLAN_ZONES = {
-    "SP_AW": (62, 1, 77, 51), "SP_NW": (84, 1, 98, 51),
-    "SP_NE": (84, 68, 98, 118), "J_N": (84, 52, 98, 67),
+    # R12: SP_* rects exclude the planner-dead |x| >= 5.8 wall band (cols
+    # <= 1 / >= 118) so the round-3 dead-end localization fins fit there;
+    # those cells were never drivable, so zone behaviour is unchanged.
+    "SP_AW": (62, 2, 77, 51), "SP_NW": (84, 2, 98, 51),
+    "SP_NE": (84, 68, 98, 117), "J_N": (84, 52, 98, 67),
     "J_AW": (62, 52, 77, 59),
     # R10: the whole-corridor SPINE mutex is re-cut into 3 junction-bounded
     # segments (ranks SPINE_S 1 < SPINE_M 2 < SPINE_N 3 < J_N 4 < J_AW 5).
