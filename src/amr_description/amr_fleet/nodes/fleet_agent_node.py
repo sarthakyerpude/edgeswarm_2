@@ -167,6 +167,19 @@ class FleetAgentNode(Node):
         # Never trust dead reckoning past this much odometry since the last
         # confident fix: the robot then simply stays LOST and stopped.
         self.declare_parameter("loc_reseed_max_odom_m", 5.0)
+        # Re-seed ONLY with evidence: below this much odometry since the last
+        # confident fix the "dead-reckoned" pose IS that fix - which, after an
+        # aliased lock-in, is the diverged pose itself. Writing it back with a
+        # tight covariance killed AMCL's injected recovery hypotheses and left
+        # robot_3 confidently 3.58 m wrong for ~7 min (loc_validate2, t=163).
+        self.declare_parameter("loc_reseed_min_odom_m", 0.3)
+        # ...and never before AMCL's own recovery injection (fired by the same
+        # sigma spike that declared LOST) has had this long to converge.
+        self.declare_parameter("loc_reseed_hold_s", 8.0)
+        # A parked robot gets no AMCL motion updates: while stationary with an
+        # amcl_pose older than this, force a scan correction periodically.
+        self.declare_parameter("loc_stationary_nomotion_after_s", 5.0)
+        self.declare_parameter("loc_stationary_nomotion_period_s", 5.0)
         self.robot_id = self.get_parameter("robot_id").value
         self.mode = self.get_parameter("coordination_mode").value
         self.v_nominal = float(self.get_parameter("v_nominal").value)
@@ -379,6 +392,8 @@ class FleetAgentNode(Node):
         self._loc_anchor = None
         self._reseed_attempts = 0
         self._last_reseed = float("-inf")
+        self._amcl_pose_t = None
+        self._last_parked_nomotion = float("-inf")
         self._pub_initialpose = self.create_publisher(
             PoseWithCovarianceStamped, "initialpose", 10)
         self.coord.state.battery_pct = float(
@@ -461,6 +476,7 @@ class FleetAgentNode(Node):
         self._last_scan_t = self._now()
 
     def cb_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
+        self._amcl_pose_t = self._now()
         cov = msg.pose.covariance
         self._amcl_cov = (cov[0], cov[7], cov[35])
         self._amcl_cov_xy = cov[1]
@@ -1315,7 +1331,27 @@ class FleetAgentNode(Node):
         if self._loc_lost:
             self._maybe_reseed(now)
             self._request_nomotion_update(now)
+        else:
+            self._parked_relocalize(now)
         return not self._loc_lost
+
+    def _parked_relocalize(self, now: float) -> None:
+        """A stationary robot never triggers AMCL's motion-gated updates, so
+        a wrong-but-confident pose would persist for as long as it waits.
+        While parked with a stale amcl_pose, force a scan correction."""
+        if self._amcl_pose_t is None or self._odom is None:
+            return
+        tw = self._odom.twist.twist
+        if abs(tw.linear.x) > 0.02 or abs(tw.angular.z) > 0.05:
+            return
+        after = float(self.get_parameter("loc_stationary_nomotion_after_s").value)
+        period = float(self.get_parameter("loc_stationary_nomotion_period_s").value)
+        if (now - self._amcl_pose_t < after
+                or now - self._last_parked_nomotion < period):
+            return
+        self._last_parked_nomotion = now
+        if self._nomotion_cli is not None and self._nomotion_cli.service_is_ready():
+            self._nomotion_cli.call_async(EmptySrv.Request())
 
     # ------------------------------------------------- LOST recovery -----
     # Why dead reckoning: the equal-aisle layout makes neighbouring aisles
@@ -1361,6 +1397,18 @@ class FleetAgentNode(Node):
         t = math.atan2(math.sin(mt + odom[2] - ot), math.cos(mt + odom[2] - ot))
         return (x, y, t), math.hypot(dx, dy)
 
+    @staticmethod
+    def reseed_decision(travelled_m: float, lost_for_s: float,
+                        min_odom_m: float, hold_s: float,
+                        max_odom_m: float) -> str:
+        """'seed', 'wait' (let AMCL's injected cloud converge first) or
+        'too_far' (odometry no longer trustworthy). Pure: unit-tested."""
+        if travelled_m > max_odom_m:
+            return "too_far"
+        if lost_for_s < hold_s or travelled_m < min_odom_m:
+            return "wait"
+        return "seed"
+
     def _maybe_reseed(self, now: float) -> None:
         if (not bool(self.get_parameter("loc_reseed_enabled").value)
                 or self._reseed_attempts >= int(
@@ -1372,7 +1420,16 @@ class FleetAgentNode(Node):
         if est is None:
             return
         (x, y, t), travelled = est
-        if travelled > float(self.get_parameter("loc_reseed_max_odom_m").value):
+        lost_for = now - (self._loc_bad_since if self._loc_bad_since is not None
+                          else now)
+        verdict = self.reseed_decision(
+            travelled, lost_for,
+            float(self.get_parameter("loc_reseed_min_odom_m").value),
+            float(self.get_parameter("loc_reseed_hold_s").value),
+            float(self.get_parameter("loc_reseed_max_odom_m").value))
+        if verdict == "wait":
+            return          # no new evidence: the nomotion updates keep going
+        if verdict == "too_far":
             if self._reseed_attempts == 0:
                 self.get_logger().error(
                     f"LOCALIZATION LOST: {travelled:.1f} m of odometry since "
@@ -1398,6 +1455,10 @@ class FleetAgentNode(Node):
         cov[35] = syaw * syaw
         msg.pose.covariance = cov
         self._pub_initialpose.publish(msg)
+        # Correct the seed against the scan at once instead of waiting for
+        # the next periodic request (or for motion that a LOST robot lacks).
+        self._last_nomotion_req = float("-inf")
+        self._request_nomotion_update(now)
         self.get_logger().warning(
             f"LOCALIZATION LOST: re-seeding AMCL by odometry dead reckoning "
             f"(attempt {self._reseed_attempts}) at ({x:.2f}, {y:.2f}, "
