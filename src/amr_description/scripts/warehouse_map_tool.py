@@ -134,6 +134,8 @@ def classify(c):
         return 'rack'
     if n.startswith('movable'):
         return 'movable_box'
+    if n.startswith('landmark_'):
+        return 'landmark'       # R11 localization landmarks: static, mapped
     if n.startswith('item_'):
         return 'item'
     r, g, b = c['colour'] or (0, 0, 0)
@@ -188,7 +190,9 @@ def rasterise(boxes, border=True):
 
 
 def ground_truth(comps, border=True, include_movable=False):
-    kinds = {'wall', 'rack'} | ({'movable_box'} if include_movable else set())
+    # Landmarks are part of the STATIC truth: AMCL must expect them, and the
+    # fleet grid must keep routes clear of them (R11 symmetry break).
+    kinds = {'wall', 'rack', 'landmark'} | ({'movable_box'} if include_movable else set())
     return rasterise([footprint(c) for c in comps
                       if c['collides'] and classify(c) in kinds], border)
 

@@ -1,3 +1,13 @@
+# AMCL retune for the aliased-corridor regime (R11, 2026-10-05, this file is
+# shared by all three robot namespaces: navigation.launch.py passes it to
+# nav2_bringup with use_namespace:=True, whose RewrittenYaml re-roots every
+# section under the robot's namespace - one edit tunes robot_1/2/3 alike).
+# Measured problem (webots_remeasure, 1 Hz believed-vs-true trace, n=927):
+# AMCL error mean 0.18 m / max 0.46 m at 0.6-1.0 m/s in the 1.6 m aisles,
+# because the R7-equalized warehouse is lidar-self-similar. Three landmark_*
+# solids now break that symmetry (warehouse.wbt + warehouse_map.pgm); the
+# parameters below make the filter actually exploit them and recover from
+# the residual in-aisle aliasing.
 amcl:
   ros__parameters:
     use_sim_time: true
@@ -6,15 +16,55 @@ amcl:
     base_frame_id: base_link
     scan_topic: scan
     map_topic: map
-    min_particles: 250
-    max_particles: 1000
-    laser_model_type: likelihood_field
-    update_min_d: 0.10
-    update_min_a: 0.10
+    # 250/1000 -> 500/3000: the aliased corridors are MULTIMODAL - the cloud
+    # must hold several x-offset hypotheses along a rack face until a
+    # landmark/end-wall beam kills the wrong ones; 1000 particles collapsed
+    # to one (sometimes wrong) mode. 3000 is the agreed CPU bound; KLD keeps
+    # the steady-state count near min_particles once converged, so the full
+    # 3000 is only paid during recovery bursts.
+    min_particles: 500
+    max_particles: 3000
+    # likelihood_field -> likelihood_field_prob: plain likelihood_field
+    # IGNORES the do_beamskip block below. The _prob variant scores with
+    # beamskip, which drops beams that disagree with the map across most of
+    # the cloud - i.e. the peer robots sharing the 1.6 m corridors (their
+    # 0.04 m lidar posts are unmapped) stop dragging the pose while mapped
+    # structure (racks, walls, landmarks) keeps its full weight.
+    laser_model_type: likelihood_field_prob
+    # 0.10/0.10 -> 0.05/0.05: at 1.0 m/s cruise 0.10 m already updated every
+    # scan, but the wedges happen in the SLOW approaches beside rack faces
+    # (<= 0.25 m/s) where 0.10 m meant <= 2.5 corrections/s while belief
+    # drifted. 0.05 m / ~3 deg doubles the correction rate exactly there and
+    # during the 1.2 rad/s turn-model spins (yaw diverged first in the live
+    # runs); the extra CPU is bounded because the scan rate caps updates.
+    update_min_d: 0.05
+    update_min_a: 0.05
+    # Resample every 2nd filter update (default 1): more frequent updates +
+    # self-similar corridors = sample impoverishment (every particle
+    # duplicates the one plausible-looking mode). Halving the resample rate
+    # preserves hypothesis diversity between landmark sightings.
+    resample_interval: 2
     transform_tolerance: 1.0     # was 0.5: scans/odom arrive late on a loaded host
+    # Gentle recovery injection (was 0.0/0.0 = disabled): the canonical
+    # 0.001/0.1 pair injects random poses only while the short-term
+    # likelihood average stays below the long-term one, i.e. precisely the
+    # measured failure (belief wedged 0.3-0.46 m off with high confidence,
+    # 44 StopZone stops with permit GO). With the asymmetric landmarks in
+    # the map, wrongly injected particles die in a few updates while a
+    # correct one near the true pose can win - without them, recovery
+    # injection in a self-similar map was a lottery, which is why it was off.
+    recovery_alpha_slow: 0.001
+    recovery_alpha_fast: 0.1
     tf_broadcast: true
     set_initial_pose: false
     always_reset_initial_pose: false
+    # Active now that laser_model_type is likelihood_field_prob (see above).
+    # 0.5 m mismatch tolerance never skips the gradual-drift correction
+    # (error grows from < 0.1 m between updates) and never skips landmark
+    # beams of a converged cloud; a beam is only dropped when > 30% of the
+    # cloud disagrees with the map by > 0.5 m (a peer robot mid-corridor).
+    # If > 90% of beams would be skipped the full scan is used instead
+    # (beam_skip_error_threshold) so a truly lost filter still measures.
     do_beamskip: true
     beam_skip_distance: 0.5
     beam_skip_threshold: 0.3
@@ -22,17 +72,36 @@ amcl:
     # Motion noise raised for the 1.0 m/s cruise (2026-10-04): each scan
     # interval now covers 2.5x the distance, and yaw diverged first in the
     # live run, so the rotational terms (alpha1, alpha2) grow most.
+    # (Kept through the R11 retune: the odometry quality is unchanged.)
     alpha1: 0.35    # rotation noise from rotation   (was 0.2)
     alpha2: 0.35    # rotation noise from translation (was 0.2)
     alpha3: 0.25    # translation noise from translation (was 0.2)
     alpha4: 0.25    # translation noise from rotation (was 0.2)
     alpha5: 0.1
-    max_beams: 60
-    z_hit: 0.95
-    z_short: 0.1
+    # 60 -> 90 beams (4 deg spacing, was 6): the 0.3 m pillar subtends ~4.3
+    # deg at 4 m and the 0.4/0.6 m fins ~4-6 deg at range - at 6 deg spacing
+    # a landmark could fall BETWEEN beams and contribute nothing. 4 deg
+    # guarantees >= 1 beam on every landmark within its useful range. Cost
+    # is bounded: steady-state is 90 x ~500 particles (KLD), comparable to
+    # the old 60 x 1000 worst case.
+    max_beams: 90
+    # 0.95/0.05 -> 0.90/0.10: z_rand doubles so unmapped returns (peer
+    # robots, the movable box) are explained as noise instead of bending the
+    # pose toward them; z_short/lambda_short and z_max are inert under the
+    # likelihood-field models (kept for documentation/beam-model fallback).
+    z_hit: 0.90
+    z_short: 0.05
     z_max: 0.05
-    z_rand: 0.05
-    sigma_hit: 0.2
+    z_rand: 0.10
+    # 0.2 -> 0.10: the sharper hit kernel is what converts the landmarks
+    # into accuracy. At sigma 0.2 a 0.2 m pose offset cost a beam only ~1
+    # sigma - the likelihood surface was too flat to separate the aliased
+    # x-offsets (measured mean error 0.18 m ~= the old sigma). At 0.10 a
+    # 0.2 m offset is 2 sigma per beam and the target regime (max <= 0.25 m,
+    # mean <= 0.12 m) sits inside the kernel's discriminating range.
+    # Overconfidence on a wrong mode is covered by resample_interval 2 +
+    # the recovery injection above.
+    sigma_hit: 0.10
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
     robot_model_type: nav2_amcl::DifferentialMotionModel

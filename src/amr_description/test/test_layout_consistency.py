@@ -90,6 +90,19 @@ def test_sdf_racks_and_endcaps_match_wbt():
     assert len(re.findall(r'<size>0\.2 0\.6 1\.6</size>', sdf)) == 12
 
 
+def _wbt_landmark_footprints():
+    """(x_min, x_max, y_min, y_max) for every landmark_* Solid, each with its
+    own Box size (independent of warehouse_map_tool.py's parser)."""
+    text = WBT.read_text()
+    out = []
+    for m in re.finditer(
+            r'translation\s+(\S+)\s+(\S+)\s+\S+\s+name\s+"landmark_\w+".*?'
+            r'Box\s*\{\s*size\s+(\S+)\s+(\S+)\s+\S+\s*\}', text, re.S):
+        x, y, sx, sy = (float(m.group(i)) for i in (1, 2, 3, 4))
+        out.append((x - sx / 2, x + sx / 2, y - sy / 2, y + sy / 2))
+    return out
+
+
 def _raster(boxes, w, h):
     """Cell occupied iff its square overlaps a box with positive area; plus
     the outermost ring (the wall faces)."""
@@ -111,7 +124,8 @@ def _raster(boxes, w, h):
 @needs_src
 def test_grid_and_pgm_equal_rasterised_world(cfg, gm):
     boxes = (_footprints(_wbt_solids("rack_"), _wbt_box_size("RACK_BOX"))
-             + _footprints(_wbt_solids("wall_endcap_"), _wbt_box_size("ENDCAP_BOX")))
+             + _footprints(_wbt_solids("wall_endcap_"), _wbt_box_size("ENDCAP_BOX"))
+             + _wbt_landmark_footprints())      # R11 localization landmarks
     truth = _raster(boxes, gm.width, gm.height)
     grid = [[0 if gm.is_static_free((r, c)) else 1 for c in range(gm.width)]
             for r in range(gm.height)]
@@ -202,6 +216,63 @@ def test_slot_convention_spot_checks(cfg):
         assert s.rack == rack
         assert abs(s.approach[0] - x) < EPS and abs(s.approach[1] - y) < EPS
         assert s.approach[2] == 0.0
+
+
+@needs_src
+def test_landmarks_match_yaml_and_stay_off_routes(cfg, gm):
+    """R11 localization landmarks (symmetry break for AMCL): the wbt solids,
+    the yaml landmarks block and the rasterised occupancy agree; and the
+    landmarks sit OFF every lane line, turnaround/junction box, traffic
+    furniture cell and station/dock A* route, keeping >= 0.35 m from every
+    routed line (the fleet-wide lane-to-face minimum)."""
+    boxes = sorted(_wbt_landmark_footprints())
+    assert len(boxes) == 3, "expected exactly 3 landmarks"
+    ycfg = sorted((lm["x_min"], lm["x_max"], lm["y_min"], lm["y_max"])
+                  for lm in cfg["landmarks"])
+    assert _same(boxes, ycfg)
+
+    def clearance(x, y):
+        return min(math.hypot(max(b[0] - x, 0.0, x - b[1]),
+                              max(b[2] - y, 0.0, y - b[3])) for b in boxes)
+
+    # Every covered cell is occupied: no planner can route through a landmark.
+    for b in boxes:
+        for r in range(int((b[2] - OY) / RES + EPS), int(math.ceil((b[3] - OY) / RES - EPS))):
+            for c in range(int((b[0] - OX) / RES + EPS), int(math.ceil((b[1] - OX) / RES - EPS))):
+                assert not gm.is_static_free((r, c)), (r, c)
+
+    # Off every station<->station and dock<->station A* route.
+    docks = [(10, 30), (10, 60), (10, 90)]              # spawn/dock cells
+    ends = sorted(set(map(tuple, list(gm.stations.values()) + docks)))
+    for i, a in enumerate(ends):
+        for b2 in ends[i + 1:]:
+            path = astar(gm, a, b2)
+            assert path, (a, b2)
+            worst = min(clearance(*gm.cell_to_world(cell)) for cell in path)
+            assert worst >= 0.35 - 1e-9, (a, b2, worst)
+
+    # Off the directed lane lines (sampled every 5 cm along each polyline).
+    for lane in cfg["traffic"]["road_lanes"]:
+        (x0, y0), (x1, y1) = lane["polyline"]
+        n = max(1, int(math.hypot(x1 - x0, y1 - y0) / 0.05))
+        worst = min(clearance(x0 + k / n * (x1 - x0), y0 + k / n * (y1 - y0))
+                    for k in range(n + 1))
+        assert worst >= 0.35 - 1e-9, (lane["id"], worst)
+
+    # No overlap with any turnaround or junction box.
+    for box in cfg["traffic"]["turnarounds"] + cfg["traffic"]["junctions"]:
+        (bx, by), (hx, hy) = box["center"], box["half_size"]
+        for b in boxes:
+            assert (min(b[1], bx + hx) - max(b[0], bx - hx) <= 0
+                    or min(b[3], by + hy) - max(b[2], by - hy) <= 0), box["id"]
+
+    # Furniture cells (pockets, wait bays, retreat cells) keep >= 0.3 m, the
+    # same bar the layout round applied against racks and walls.
+    cells = (cfg["traffic"]["pockets"] + list(cfg["traffic"]["wait_bays"].values())
+             + cfg["traffic"]["retreat_cells"])
+    for cell in cells:
+        x, y = gm.cell_to_world(tuple(cell))
+        assert clearance(x, y) >= 0.3, cell
 
 
 def test_fleet_sim_ground_truth_rects_match_yaml(cfg):

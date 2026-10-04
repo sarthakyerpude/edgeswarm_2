@@ -4,6 +4,8 @@
 # three rack rows (5.0 x 0.6 x 1.6 segments) at y 3.1 / 0.9 / -1.3, x=+/-3.3 each:
 # every aisle and the N-S spine is 1.6 m wide (R7 equal aisles, 2 robots abreast);
 # the 0.2 m rack-end gaps to the E/W walls are closed by wall_endcap_* solids.
+# Three landmark_* solids in the south area break the lidar self-similarity
+# the R7 equalization created (see the landmark section below).
 # Geometry must stay matched to nav's warehouse_map.pgm, or AMCL mislocalizes.
 #
 # The three robots are written INLINE (no EXTERNPROTO): webots_ros2 copies the
@@ -185,6 +187,72 @@ Solid {
   name "wall_endcap_row3_east"
   children [ Shape { appearance USE WALL_APP geometry USE ENDCAP_BOX } ]
   boundingObject USE ENDCAP_BOX
+}
+
+# ---- localization landmarks (R11, symmetry break) ---------------------------
+# After the R7 equalization every aisle is 1.6 m and every rack 5.0 m, so the
+# warehouse is lidar-self-similar along x and between aisles: AMCL scan
+# matching aliased (measured 0.18 m mean / 0.46 m max believed-vs-true error,
+# robots wedged against rack faces with permit GO). These three STATIC solids
+# give scans unique, asymmetric structure. They live in the SOUTH operating
+# area because it is the only region with slack: every aisle/spine lane line
+# runs 0.35 m from a rack face (0.145 m beyond the 0.205 m robot envelope),
+# so nothing may protrude into the corridors or the turnaround boxes.
+# All faces land on 0.1 m grid-cell edges; height 1.2 m crosses the 0.20 m
+# scan plane. Placement verified (test_layout_consistency.py): off every
+# lane, turnaround, station approach and A* station route, >= 0.35 m from
+# every routed line (the fleet-wide lane-to-face minimum).
+#
+#   landmark_pillar_se  0.3 x 0.3 at ( 1.35, -4.55): freestanding, 0.3 m off
+#     the south wall, SE of the spine mouth. Breaks the x-mirror symmetry;
+#     visible from the spine south throat, the lower spine (south of rack 6's
+#     SW corner - a measured wedge site), J_AW down the spine gap, the
+#     dropoff row and both wait bays. Kept near the wall so its 1.0 m
+#     clearance-cost halo (gridmap CLEARANCE_CAP_M) stays clear of the
+#     dock-departure diagonals and the row-22 dropoff traffic: at y -3.45 the
+#     halo re-routed dock3->L2 and moved a planned turn point onto the aisle
+#     N lane line (test_turn_geometry caught the 90-degree spin there).
+#   landmark_fin_w      0.6 x 0.2 at (-5.70, -2.40): baffle flush on the WEST
+#     wall, west of CHG1 (dead space). y -2.4, NOT -2.2: the rack-5 south
+#     face has slot approach cells on row 30 (y -1.95, e.g. 10R1 at x -5.65)
+#     which must keep >= 0.24 m clearance (test_lanes_and_feasibility);
+#     at y -2.4 the fin leaves them the fleet-standard 0.35 m.
+#   landmark_fin_e      0.4 x 0.2 at ( 5.80, -3.60): shorter baffle flush on
+#     the EAST wall at a DIFFERENT y and length than the west fin, so
+#     east-vs-west and north-vs-south scan signatures never match under any
+#     mirror/180-degree hypothesis.
+Solid {
+  translation 1.35 -4.55 0.6
+  name "landmark_pillar_se"
+  children [
+    Shape {
+      appearance DEF LANDMARK_APP PBRAppearance { baseColor 0.75 0.12 0.12 roughness 1 metalness 0 }
+      geometry DEF LM_PILLAR_BOX Box { size 0.3 0.3 1.2 }
+    }
+  ]
+  boundingObject USE LM_PILLAR_BOX
+}
+Solid {
+  translation -5.7 -2.4 0.6
+  name "landmark_fin_w"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_FIN_W_BOX Box { size 0.6 0.2 1.2 }
+    }
+  ]
+  boundingObject USE LM_FIN_W_BOX
+}
+Solid {
+  translation 5.8 -3.6 0.6
+  name "landmark_fin_e"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_FIN_E_BOX Box { size 0.4 0.2 1.2 }
+    }
+  ]
+  boundingObject USE LM_FIN_E_BOX
 }
 
 # ---- visual-only markers (no collision) ------------------------------------

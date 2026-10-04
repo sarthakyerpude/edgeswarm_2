@@ -31,6 +31,11 @@ for cy in (3.1, 0.9, -1.3):          # R7: 5.0 x 0.6 m racks, 1.6 m aisles
     BOXES += [(-5.8, -0.8, cy - 0.3, cy + 0.3), (0.8, 5.8, cy - 0.3, cy + 0.3)]
     # rack-end caps (wall_endcap_*) closing the 0.2 m end gaps
     BOXES += [(-6.0, -5.8, cy - 0.3, cy + 0.3), (5.8, 6.0, cy - 0.3, cy + 0.3)]
+# R11 localization landmarks (landmark_* in warehouse.wbt): static solids in
+# the south area that break the lidar self-similarity; beams on them are TRUE.
+BOXES += [(1.2, 1.5, -4.7, -4.4),     # landmark_pillar_se
+          (-6.0, -5.4, -2.5, -2.3),   # landmark_fin_w
+          (5.6, 6.0, -3.7, -3.5)]     # landmark_fin_e
 
 
 def cast(a):

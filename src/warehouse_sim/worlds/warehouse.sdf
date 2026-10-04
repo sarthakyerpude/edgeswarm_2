@@ -347,6 +347,53 @@
         </visual>
       </link>
 
+      <!-- R11 localization landmarks: break the lidar self-similarity the
+           R7 equalization created (all aisles 1.6 m, all racks 5.0 m made
+           scans alias; AMCL error hit 0.46 m). Same poses/sizes as the
+           landmark_* solids in webots_warehouse_sim/worlds/warehouse.wbt and
+           the landmarks block in amr_description/config/warehouse_grid.yaml.
+           All in the south operating area, off every lane/turnaround/route
+           (>= 0.35 m from each routed line); faces on 0.1 m cell edges. -->
+      <link name="landmark_pillar_se">
+        <pose>1.35 -4.55 0.6 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.3 0.3 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.3 0.3 1.2</size></box></geometry>
+          <material>
+            <ambient>0.6 0.1 0.1 1</ambient>
+            <diffuse>0.75 0.12 0.12 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <link name="landmark_fin_w">
+        <pose>-5.7 -2.4 0.6 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.6 0.2 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.6 0.2 1.2</size></box></geometry>
+          <material>
+            <ambient>0.6 0.1 0.1 1</ambient>
+            <diffuse>0.75 0.12 0.12 1</diffuse>
+          </material>
+        </visual>
+      </link>
+      <link name="landmark_fin_e">
+        <pose>5.8 -3.6 0.6 0 0 0</pose>
+        <collision name="collision">
+          <geometry><box><size>0.4 0.2 1.2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.4 0.2 1.2</size></box></geometry>
+          <material>
+            <ambient>0.6 0.1 0.1 1</ambient>
+            <diffuse>0.75 0.12 0.12 1</diffuse>
+          </material>
+        </visual>
+      </link>
+
     </model>
 
     <!-- =====================================================================
