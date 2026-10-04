@@ -179,9 +179,16 @@ def test_crossing_zones_are_junction_boxes_and_turnarounds():
         "TA_N_W", "TA_N_E", "TA_A_W", "TA_A_E", "TA_B_W", "TA_B_E",
         "TA_SPINE_S", "TA_B_WM", "TA_B_EM", "TA_A_EM"]
     assert len(GRID.turnaround_rects) == 10
+    # Every turnaround cell is static-free EXCEPT the side-wall band
+    # cols <= 1 / >= 118 (|x| >= 5.8): those cells were already planner-dead
+    # against the border ring (clearance < CLEARANCE_LETHAL 0.225) before
+    # the round-2 dead-end localization fins (landmark_end_* in
+    # warehouse.wbt) occupied some of them; U-turn sweeps reach |x| <= 5.71,
+    # so no usable U-turn cell is lost (test_layout_consistency pins this).
     for (r0, c0, r1, c1) in GRID.turnaround_rects:
         assert all(GRID.is_static_free((r, c))
-                   for r in range(r0, r1 + 1) for c in range(c0, c1 + 1))
+                   for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)
+                   if 1 < c < 118)
     assert GRID.in_crossing_zone(88, 5)        # TA_N_W (aisle N dead end)
     assert GRID.in_crossing_zone(47, 112)      # TA_B_E
     assert GRID.in_crossing_zone(90, 60)       # J_N box (band overlap)

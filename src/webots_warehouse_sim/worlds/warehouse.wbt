@@ -255,6 +255,86 @@ Solid {
   boundingObject USE LM_FIN_E_BOX
 }
 
+# ---- round-2 landmarks (loc_validate): the round-1 south-floor set fixed
+# the downstream symptoms but ALONG-TRACK error in the corridors remained
+# (24/39 bad samples south floor under peer occlusion, 7 aisle A, 7 spine;
+# max 0.50 m). Root cause: a corridor endpoint displaced ALONG the corridor
+# stays near the SIDE walls, so the likelihood field barely penalizes it -
+# only mid-aisle-width structure discriminates x. These fins are mid-height
+# surfaces on the aisle END walls (range step + corners the side walls
+# cannot absorb) plus one more south-wall fin for the drop row.
+#
+# Placement constraints obeyed (all verified by test_layout_consistency):
+# - zone rects must stay static-free (test_grid_config): SP_NW/SP_NE cover
+#   the ENTIRE north aisle (rows 84-98, cols 1-51/68-118) and SP_AW covers
+#   aisle A's west half, ring columns included - so NO in-map fin is
+#   possible there. Acceptable: the validation trace had ZERO bad samples
+#   in aisle N, and aisle A west keeps the spine-crossing corners (x -0.8)
+#   plus the new east fin (<= 7 m away, in lidar range from everywhere in
+#   the aisle, aisle length 11.6 m < 2x8 m).
+# - rack-slot approach lines end at cols 3/116 (x +-5.65) on rows 44/52/66/
+#   74; every fin band keeps >= 0.3 m chamfer clearance from them (the
+#   test_lanes_and_feasibility bar is 0.24).
+# - fins occupy only the wall band |x| >= 5.8 (planner-dead: clearance
+#   against the border ring was already < CLEARANCE_LETHAL 0.225), so no
+#   usable turnaround/route cell is lost; U-turn pivots sweep to |x| 5.71.
+# - distinct (width, y-offset) per aisle AND per end, so east-vs-west and
+#   aisle-vs-aisle scan hypotheses score differently.
+#
+#   landmark_end_a_e  0.2 x 0.3 at ( 5.90, 2.05): aisle A east dead end,
+#     mid-band between the EB/WB lines (0.35/0.25 from them).
+#   landmark_end_b_w  0.2 x 0.3 at (-5.90, -0.15): aisle B west dead end.
+#   landmark_end_b_e  0.2 x 0.2 at ( 5.90, -0.20): aisle B east dead end,
+#     narrower than b_w and offset, so B's two ends differ.
+#   landmark_fin_s    0.6 x 0.2 at (-1.60, -4.90): flush on the SOUTH wall,
+#     west half, between the dock-1/2 columns (>= 1.1 m from the staging
+#     poses at y -4.7). Gives drop-row robots a west-side near reference
+#     when peers occlude the SE pillar; distinct x/width/depth from it.
+Solid {
+  translation 5.9 2.05 0.6
+  name "landmark_end_a_e"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_END_A_E_BOX Box { size 0.2 0.3 1.2 }
+    }
+  ]
+  boundingObject USE LM_END_A_E_BOX
+}
+Solid {
+  translation -5.9 -0.15 0.6
+  name "landmark_end_b_w"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_END_B_W_BOX Box { size 0.2 0.3 1.2 }
+    }
+  ]
+  boundingObject USE LM_END_B_W_BOX
+}
+Solid {
+  translation 5.9 -0.2 0.6
+  name "landmark_end_b_e"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_END_B_E_BOX Box { size 0.2 0.2 1.2 }
+    }
+  ]
+  boundingObject USE LM_END_B_E_BOX
+}
+Solid {
+  translation -1.6 -4.9 0.6
+  name "landmark_fin_s"
+  children [
+    Shape {
+      appearance USE LANDMARK_APP
+      geometry DEF LM_FIN_S_BOX Box { size 0.6 0.2 1.2 }
+    }
+  ]
+  boundingObject USE LM_FIN_S_BOX
+}
+
 # ---- visual-only markers (no collision) ------------------------------------
 Pose {
   translation 0 2.0 0.006

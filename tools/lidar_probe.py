@@ -35,7 +35,11 @@ for cy in (3.1, 0.9, -1.3):          # R7: 5.0 x 0.6 m racks, 1.6 m aisles
 # the south area that break the lidar self-similarity; beams on them are TRUE.
 BOXES += [(1.2, 1.5, -4.7, -4.4),     # landmark_pillar_se
           (-6.0, -5.4, -2.5, -2.3),   # landmark_fin_w
-          (5.6, 6.0, -3.7, -3.5)]     # landmark_fin_e
+          (5.6, 6.0, -3.7, -3.5),     # landmark_fin_e
+          (5.8, 6.0, 1.9, 2.2),       # landmark_end_a_e (round 2)
+          (-6.0, -5.8, -0.3, 0.0),    # landmark_end_b_w
+          (5.8, 6.0, -0.3, -0.1),     # landmark_end_b_e
+          (-1.9, -1.3, -5.0, -4.8)]   # landmark_fin_s
 
 
 def cast(a):

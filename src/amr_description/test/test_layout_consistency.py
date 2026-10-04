@@ -226,7 +226,7 @@ def test_landmarks_match_yaml_and_stay_off_routes(cfg, gm):
     furniture cell and station/dock A* route, keeping >= 0.35 m from every
     routed line (the fleet-wide lane-to-face minimum)."""
     boxes = sorted(_wbt_landmark_footprints())
-    assert len(boxes) == 3, "expected exactly 3 landmarks"
+    assert len(boxes) == 7, "expected 7 landmarks (3 south-floor + 4 round-2)"
     ycfg = sorted((lm["x_min"], lm["x_max"], lm["y_min"], lm["y_max"])
                   for lm in cfg["landmarks"])
     assert _same(boxes, ycfg)
@@ -252,19 +252,35 @@ def test_landmarks_match_yaml_and_stay_off_routes(cfg, gm):
             assert worst >= 0.35 - 1e-9, (a, b2, worst)
 
     # Off the directed lane lines (sampled every 5 cm along each polyline).
+    # Samples inside a turnaround box are exempt: there the lane is advisory
+    # (crossing zone), robots manoeuvre slowly off-line, and the polyline
+    # endpoints extend to x +-5.75 - into the planner-dead wall band where
+    # the round-2 dead-end fins live.
+    tas = [(bx - hx, bx + hx, by - hy, by + hy)
+           for (bx, by), (hx, hy) in ((t["center"], t["half_size"])
+                                      for t in cfg["traffic"]["turnarounds"])]
     for lane in cfg["traffic"]["road_lanes"]:
         (x0, y0), (x1, y1) = lane["polyline"]
         n = max(1, int(math.hypot(x1 - x0, y1 - y0) / 0.05))
-        worst = min(clearance(x0 + k / n * (x1 - x0), y0 + k / n * (y1 - y0))
-                    for k in range(n + 1))
+        worst = min((clearance(px, py)
+                     for px, py in ((x0 + k / n * (x1 - x0), y0 + k / n * (y1 - y0))
+                                    for k in range(n + 1))
+                     if not any(t[0] <= px <= t[1] and t[2] <= py <= t[3]
+                                for t in tas)), default=10.0)
         assert worst >= 0.35 - 1e-9, (lane["id"], worst)
 
-    # No overlap with any turnaround or junction box.
+    # No overlap with any turnaround or junction box - except inside the
+    # |x| >= 5.8 side-wall band, which was planner-dead before any landmark
+    # existed (clearance against the border ring < CLEARANCE_LETHAL 0.225),
+    # so the round-2 dead-end fins there remove no usable turnaround cell.
     for box in cfg["traffic"]["turnarounds"] + cfg["traffic"]["junctions"]:
         (bx, by), (hx, hy) = box["center"], box["half_size"]
         for b in boxes:
-            assert (min(b[1], bx + hx) - max(b[0], bx - hx) <= 0
-                    or min(b[3], by + hy) - max(b[2], by - hy) <= 0), box["id"]
+            ox0, ox1 = max(b[0], bx - hx), min(b[1], bx + hx)
+            oy0, oy1 = max(b[2], by - hy), min(b[3], by + hy)
+            if ox1 - ox0 <= 0 or oy1 - oy0 <= 0:
+                continue                                  # no overlap
+            assert ox0 >= 5.8 - 1e-9 or ox1 <= -5.8 + 1e-9, (box["id"], b)
 
     # Furniture cells (pockets, wait bays, retreat cells) keep >= 0.3 m, the
     # same bar the layout round applied against racks and walls.

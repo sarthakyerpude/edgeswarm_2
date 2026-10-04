@@ -45,16 +45,27 @@ amcl:
     # preserves hypothesis diversity between landmark sightings.
     resample_interval: 2
     transform_tolerance: 1.0     # was 0.5: scans/odom arrive late on a loaded host
-    # Gentle recovery injection (was 0.0/0.0 = disabled): the canonical
-    # 0.001/0.1 pair injects random poses only while the short-term
-    # likelihood average stays below the long-term one, i.e. precisely the
-    # measured failure (belief wedged 0.3-0.46 m off with high confidence,
-    # 44 StopZone stops with permit GO). With the asymmetric landmarks in
-    # the map, wrongly injected particles die in a few updates while a
-    # correct one near the true pose can win - without them, recovery
-    # injection in a self-similar map was a lottery, which is why it was off.
-    recovery_alpha_slow: 0.001
-    recovery_alpha_fast: 0.1
+    # Gentle recovery injection (was 0.0/0.0 = disabled): injects random
+    # poses only while the short-term likelihood average w_fast stays below
+    # the long-term w_slow, i.e. precisely the measured failure (belief
+    # wedged 0.3-0.5 m off with high confidence, StopZone stops with permit
+    # GO). With the asymmetric landmarks in the map, wrongly injected
+    # particles die in a few updates while a correct one near the true pose
+    # can win - without them, injection in a self-similar map was a lottery,
+    # which is why it was off.
+    # Round 2 (loc_validate): the canonical 0.001/0.1 pair was too hot - a
+    # 1-2 update likelihood dip (peer occluding the landmark sector) sank
+    # w_fast (time constant ~0.1 s of updates) enough to inject, sigma
+    # spiked, and the lane gate thrashed (78 LANES<->SPINE flips, mean
+    # episode 7 s). Halving both alphas quarters nothing structural: w_fast
+    # now averages over ~20 updates (~2 s) so occlusion transients no longer
+    # open a w_fast < w_slow gap, while the REAL divergences (sustained
+    # > 0.3 m for many seconds, 8 measured) depress w_fast for their whole
+    # duration and still fire injection within ~2-3 s of onset; w_slow's
+    # longer baseline (~1/0.0005 updates) keeps the reference from chasing
+    # the divergence down, preserving the trigger.
+    recovery_alpha_slow: 0.0005
+    recovery_alpha_fast: 0.05
     tf_broadcast: true
     set_initial_pose: false
     always_reset_initial_pose: false
