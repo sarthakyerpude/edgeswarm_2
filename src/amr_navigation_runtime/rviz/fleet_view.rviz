@@ -1,0 +1,162 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+  - Class: rviz_common/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Enabled: true
+      Name: Grid
+      Cell Size: 1
+      Plane Cell Count: 14
+    - Class: rviz_default_plugins/Map
+      Enabled: true
+      Name: Warehouse Map
+      Topic:
+        Value: /robot_1/map
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+      Color Scheme: map
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Rack Labels
+      Namespaces:
+        sections: true
+        sides: true
+        ticks: true
+      Topic:
+        Value: /fleet/rack_labels
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Hitboxes
+      Namespaces:
+        robot_1: true
+        robot_2: true
+        robot_3: true
+      Topic:
+        Value: /fleet/hitboxes
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+    - Class: rviz_default_plugins/Marker
+      Enabled: true
+      Name: Fleet Lidar Points
+      Topic:
+        Value: /fleet/scan_points
+        Reliability Policy: Best Effort
+    - Class: rviz_default_plugins/Path
+      Enabled: true
+      Name: Path robot_1
+      Color: 239; 68; 56
+      Line Width: 0.04
+      Line Style: Billboards
+      Topic:
+        Value: /robot_1/coordination_path
+        Durability Policy: Transient Local
+    - Class: rviz_default_plugins/Path
+      Enabled: true
+      Name: Path robot_2
+      Color: 56; 200; 90
+      Line Width: 0.04
+      Line Style: Billboards
+      Topic:
+        Value: /robot_2/coordination_path
+        Durability Policy: Transient Local
+    - Class: rviz_default_plugins/Path
+      Enabled: true
+      Name: Path robot_3
+      Color: 66; 128; 244
+      Line Width: 0.04
+      Line Style: Billboards
+      Topic:
+        Value: /robot_3/coordination_path
+        Durability Policy: Transient Local
+    - Class: rviz_default_plugins/PoseWithCovariance
+      Enabled: true
+      Name: Pose robot_1
+      Color: 239; 68; 56
+      Topic:
+        Value: /robot_1/amcl_pose
+    - Class: rviz_default_plugins/PoseWithCovariance
+      Enabled: true
+      Name: Pose robot_2
+      Color: 56; 200; 90
+      Topic:
+        Value: /robot_2/amcl_pose
+    - Class: rviz_default_plugins/PoseWithCovariance
+      Enabled: true
+      Name: Pose robot_3
+      Color: 66; 128; 244
+      Topic:
+        Value: /robot_3/amcl_pose
+  Global Options:
+    Fixed Frame: map
+    Frame Rate: 15
+    Background Color: 34; 39; 46
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Value: true
+  Views:
+    Current:
+      # Flat top-down map view (+x right, +y up, same as the dashboard and
+      # the Gazebo layout); Scale = pixels per metre, sized so the whole
+      # 12.3 x 10.3 m warehouse fits the render area.
+      Class: rviz_default_plugins/TopDownOrtho
+      Angle: 0
+      Scale: 55
+      X: 0
+      Y: 0
+      Name: Current View
+    # Views panel: double-click a saved view to switch. Robot-follow views
+    # are not possible: per-robot TF lives on /robot_N/tf, not /tf.
+    Saved:
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: Top-down (whole warehouse)
+        Angle: 0
+        Scale: 55
+        X: 0
+        Y: 0
+      - Class: rviz_default_plugins/Orbit
+        Name: 3D orbit (whole warehouse)
+        Distance: 14
+        Focal Point:
+          X: 0
+          Y: -0.5
+          Z: 0
+        Pitch: 0.95
+        Yaw: 4.712
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: Close-up north aisles and pickups
+        Angle: 0
+        Scale: 110
+        X: 0
+        Y: 3.3
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: Close-up centre corridor (spine)
+        Angle: 0
+        Scale: 110
+        X: 0
+        Y: 1.2
+      - Class: rviz_default_plugins/TopDownOrtho
+        Name: Close-up dropoffs and homes
+        Angle: 0
+        Scale: 110
+        X: 0
+        Y: -3.3
+Window Geometry:
+  Height: 860
+  Width: 1400
+  X: 380
+  Y: 0

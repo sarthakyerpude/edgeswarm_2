@@ -1,310 +1,326 @@
-# EdgeSwarm: Decentralized Multi-AMR Fleet Coordination
+# EdgeSwarm
 
-> **Distributed, Peer-to-Peer Autonomous Mobile Robot (AMR) Fleet Coordination and Navigation for Smart Warehouses**  
-> *Zero Central Server · ROS 2 Jazzy · Gazebo Harmonic · Zenoh / DDS P2P · Nav2 · Optional Edge-AI*
+A decentralized fleet of three autonomous mobile robots for warehouse pick and
+delivery, built on ROS 2 Jazzy, Nav2 and Webots. Robots coordinate peer to
+peer with no central server: tasks are allocated by a distributed auction,
+traffic flows on keep-right lanes with box junctions and right-of-way rules,
+and collisions are prevented by a hitbox safety envelope computed from each
+robot's real footprint and localization uncertainty.
 
----
+## Fleet UI
 
-## 📌 Executive Architecture & System Flow
+![Warehouse map](docs/images/fleet-ui-map.png)
 
-EdgeSwarm is designed without any central coordinator or single point of failure. Every AMR is an autonomous agent operating with its own local sensing, navigation stack, and peer-to-peer coordination engine.
+![Traffic view](docs/images/fleet-ui-traffic.png)
 
-```mermaid
-flowchart TD
-    subgraph Sim ["Gazebo Harmonic Simulation (Physics & Sensors)"]
-        GZ_WORLD["Warehouse World (12m x 10m)\nShelves, Aisles, Dropoffs"]
-        GZ_PHYS["DiffDrive Physics Engine"]
-        GZ_SENS["2D LiDAR & Virtual Sensors"]
-        GZ_WORLD --> GZ_PHYS
-        GZ_WORLD --> GZ_SENS
-    end
+## Contents
 
-    subgraph Bridge ["ros_gz_bridge (Transport Bridge)"]
-        BR_ODOM["/robot_N/odom (Gazebo -> ROS)"]
-        BR_SCAN["/robot_N/scan (Gazebo -> ROS)"]
-        BR_CLOCK["/clock (Gazebo -> ROS)"]
-        BR_CMD["/robot_N/cmd_vel (ROS -> Gazebo)"]
-    end
+1. [What you need](#1-what-you-need)
+2. [Terminals used in this guide](#2-terminals-used-in-this-guide)
+3. [One-time setup, Windows side](#3-one-time-setup-windows-side)
+4. [One-time setup, WSL side](#4-one-time-setup-wsl-side)
+5. [Running the project](#5-running-the-project)
+6. [Using the fleet](#6-using-the-fleet)
+7. [Tests and evaluation](#7-tests-and-evaluation)
+8. [Rebuilding after code changes](#8-rebuilding-after-code-changes)
+9. [Project structure](#9-project-structure)
+10. [Key configuration files](#10-key-configuration-files)
+11. [Troubleshooting](#11-troubleshooting)
+12. [Known limitations](#12-known-limitations)
 
-    GZ_PHYS --> BR_ODOM
-    GZ_SENS --> BR_SCAN
-    Sim --> BR_CLOCK
-    BR_CMD --> GZ_PHYS
+## 1. What you need
 
-    subgraph Nav ["ROS 2 & Nav2 Autonomous Navigation Stack"]
-        RSP["Robot State Publisher & TF\n(URDF/Xacro Transform Tree)"]
-        LOC["Localization (AMCL / EKF)\nMap <-> Odom Transform"]
-        COST["Global & Local Costmaps\nStatic Map + Dynamic Obstacles"]
-        PLANNER["Nav2 Path Planner\n(Global Smac / NavFn)"]
-        CONTROLLER["Nav2 Controller\n(RPP / DWB cmd_vel_raw)"]
-        GATE["Motion Permit Safety Gate\n(GO / SLOW / STOP / YIELD)"]
-        
-        LOC --> COST
-        COST --> PLANNER
-        PLANNER --> CONTROLLER
-        CONTROLLER --> GATE
-        GATE --> BR_CMD
-    end
+- Windows 11
+- WSL2 with Ubuntu 24.04
+- ROS 2 Jazzy inside WSL (install steps below)
+- Webots R2025a installed on Windows (not inside WSL)
+- About 8 GB of RAM available for WSL and roughly 10 GB of disk
 
-    BR_ODOM --> LOC
-    BR_ODOM --> RSP
-    BR_SCAN --> LOC
-    BR_SCAN --> COST
+## 2. Terminals used in this guide
 
-    subgraph Coord ["Decentralized Coordination (amr_fleet/core)"]
-        COORDINATOR["Coordinator Decision Engine (10 Hz Tick)"]
-        SPATIAL["Space-Time A* Planner & Intent Claim"]
-        RA_ZONES["Ricart-Agrawala Priority Zones (Mutual Exclusion)"]
-        CONFLICT["4-Way Conflict Detector (CELL, SWAP, ZONE, TTC)"]
-        DEADLOCK["Distributed Wait-For Graph (Cycle Detection)"]
-        AUCTION["Auctioneer-Free Task Auction (Distributed Bidding)"]
+Two different terminals are used. Every command block below is labeled.
 
-        COORDINATOR --> SPATIAL
-        COORDINATOR --> RA_ZONES
-        COORDINATOR --> CONFLICT
-        COORDINATOR --> DEADLOCK
-        COORDINATOR --> AUCTION
-    end
+- POWERSHELL (ADMIN): Windows PowerShell started with "Run as
+  administrator". Used once, for the firewall rule.
+- WSL TERMINAL: an Ubuntu shell. Open it from Windows Terminal by picking
+  the Ubuntu profile, or type `wsl` in any PowerShell window. All build,
+  run and test commands happen here.
 
-    BR_ODOM --> COORDINATOR
-    BR_SCAN --> COORDINATOR
-    COORDINATOR --> GATE
+In this guide the project is cloned to the Windows file system and accessed
+from WSL under `/mnt/c`. The example path used everywhere below is:
 
-    subgraph Comms ["Zenoh / DDS Decentralized Peer-to-Peer Mesh"]
-        ZENOH_ROUTER["Zenoh P2P Protocol (rmw_zenoh_cpp / Bridge)\nUltra-low latency, Multicast-free Discovery"]
-        T_STATE["/fleet/robot_state (10 Hz Best Effort)"]
-        T_INTENT["/fleet/intent (Space-Time Claims)"]
-        T_ZONES["/fleet/zone_request & /fleet/zone_grant"]
-        T_TASKS["/fleet/task_announce, bid & award"]
-        
-        ZENOH_ROUTER --- T_STATE
-        ZENOH_ROUTER --- T_INTENT
-        ZENOH_ROUTER --- T_ZONES
-        ZENOH_ROUTER --- T_TASKS
-    end
+- Windows view: `C:\Users\<you>\edgeswarm_2`
+- WSL view of the same folder: `/mnt/c/Users/<you>/edgeswarm_2`
 
-    COORDINATOR <==> Comms
+Replace `<you>` with your Windows user name. Any folder works; keep the two
+views consistent.
 
-    subgraph EdgeAI ["Edge AI Module (Optional / Advanced Extension)"]
-        AI_CONGEST["Predictive Bottleneck & Congestion Forecaster"]
-        AI_BIDS["Learned Cost & Battery Traversal Weighting"]
-        AI_VISION["Onboard Anomaly & Obstacle Classification"]
-        
-        EdgeAI -.-> COORDINATOR
-        EdgeAI -.-> PLANNER
-    end
+## 3. One-time setup, Windows side
 
-    style Sim fill:#1e293b,stroke:#3b82f6,stroke-width:2px,color:#fff
-    style Bridge fill:#334155,stroke:#94a3b8,stroke-width:1px,color:#fff
-    style Nav fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#fff
-    style Coord fill:#1e1b4b,stroke:#8b5cf6,stroke-width:2px,color:#fff
-    style Comms fill:#312e81,stroke:#6366f1,stroke-width:2px,color:#fff
-    style EdgeAI fill:#451a03,stroke:#f59e0b,stroke-width:2px,stroke-dasharray: 5 5,color:#fff
+Step 3.1 - install WSL and Ubuntu 24.04 (skip if you have it):
+
+```powershell
+# POWERSHELL (ADMIN)
+wsl --install -d Ubuntu-24.04
 ```
 
----
+Reboot if Windows asks. Then create your Ubuntu user when the Ubuntu window
+opens for the first time.
 
-## 🧠 Architectural Mind Map
+Step 3.2 - install Webots R2025a on Windows from
+https://cyberbotics.com/doc/guide/installation-procedure. Use the default
+location `C:\Program Files\Webots`. The simulation starts Webots from WSL
+automatically; you never need to open Webots yourself.
 
-```mermaid
-mindmap
-  root((EdgeSwarm))
-    Simulation & World
-      Gazebo Harmonic gz-sim
-      12m x 10m Warehouse SDF
-      Dynamic Obstacles & Pallets
-      Spawn Points spawn_1 to spawn_3
-      LiDAR & Odometry Sensors
-    Actuation & Nav2
-      Differential Drive Mechanics
-      Nav2 Controller RPP / DWB
-      Costmaps Static & Dynamic
-      AMCL Localization
-      Velocity Gate MotionPermit
-    Decentralized Coordination
-      Deterministic Priority Function
-      Ricart-Agrawala Zone Locks
-      4-Way Conflict Detectors
-      Space-Time Intent Sharing
-      Distributed Cycle Deadlock Breaker
-      Auctioneer-Free Task Bidding
-    P2P Communication
-      Zenoh Zero-Broker Mesh
-      rmw_zenoh_cpp or Zenoh Bridge
-      CycloneDDS Fallback
-      Absolute /fleet Topics
-      Relative /robot_N Topics
-    Edge AI Optional
-      Congestion Heatmap Prediction
-      Learned Aisle Traversal Costs
-      Vision-based Hazard Detection
+Step 3.3 - allow the Webots controller port through the Windows firewall:
+
+```powershell
+# POWERSHELL (ADMIN)
+netsh advfirewall firewall add rule name="Webots extern" dir=in action=allow protocol=TCP localport=1234
 ```
 
----
+Step 3.4 - configure WSL memory and networking. Create or edit the file
+`C:\Users\<you>\.wslconfig` (plain text, Notepad is fine) with exactly:
 
-## 🛠️ Stack Breakdown & Roles
-
-### 1. Gazebo Harmonic (Simulation & Sensors)
-- **Role:** Generates ground-truth physics, wheel contact forces, collisions, and sensor data.
-- **Environment:** `worlds/warehouse.sdf` containing a 12m × 10m layout, narrow aisles (0.9m), standard aisles (1.5m), rack rows, and pickup/drop-off zones.
-- **Sensors:** 2D LiDAR (360 samples, 10 Hz, 8m range) and Differential Drive odometry.
-- **Bridge:** `ros_gz_bridge parameter_bridge` maps Gazebo transport topics to standard ROS 2 message types (`/clock`, `/odom`, `/scan`, `/cmd_vel`).
-
-### 2. ROS 2 Jazzy (AMR Core Operation)
-- **Role:** Node lifecycle, TF transforms, executor scheduling, and inter-package messaging.
-- **Topic Scoping Rule:**
-  - **Per-Robot Topics (Relative):** `odom`, `scan`, `motion_permit`, `cmd_vel` → resolve to `/robot_N/<topic>`.
-  - **Fleet-Wide Topics (Absolute):** `/fleet/robot_state`, `/fleet/intent`, `/fleet/zone_*`, `/fleet/task_*` → globally shared across all robots without namespaces.
-
-### 3. Zenoh / DDS (Decentralized Communication)
-- **Role:** High-throughput, low-latency peer-to-peer data distribution without a central master.
-- **Why Zenoh:** Standard DDS multicast discovery saturates Wi-Fi networks in multi-robot environments. Zenoh provides point-to-point and routed communication with 99% reduced discovery traffic, ideal for distributed robotic swarms.
-- **Operation Modes:**
-  - `rmw_zenoh_cpp` for native ROS 2 RMW replacement.
-  - Or `zenoh-bridge-ros2dds` running alongside local CycloneDDS instances.
-
-### 4. Nav2 (Autonomous Navigation)
-- **Role:** Path generation and path execution within the warehouse.
-- **Interaction with Fleet Coordination:**
-  - Coordination is **advisory and supervisory**. The fleet coordinator does not directly drive the wheels; it emits a `MotionPermit` (`GO`, `SLOW`, `STOP`, `YIELD`, `REROUTE`).
-  - Nav2's output velocity `cmd_vel_raw` passes through the `motion_permit` gate before reaching Gazebo or hardware motors.
-
-### 5. Edge AI (Optional / Future Phase)
-- **Role:** Onboard machine learning models for proactive optimization:
-  - **Congestion Heatmap Forecasting:** Predicts traffic bottlenecks before robots enter narrow aisles.
-  - **Dynamic Task Valuation:** Neural network weighting for auction bids based on battery consumption and expected corridor congestion.
-  - **Obstacle & Worker Detection:** Edge vision on robot cameras to classify unexpected obstacles (e.g. fallen pallet vs human worker).
-
----
-
-## 📂 Repository Structure
-
-```
-edgeswarm_2/
-├── .gitignore
-├── README.md                      # Root project overview and architecture
-└── ros2_ws/                       # ROS 2 Jazzy Workspace
-    └── src/
-        ├── amr_description/       # Coordination engine, robot model & fleet nodes
-        │   ├── amr_fleet/         # Python package
-        │   │   ├── core/          # PURE PYTHON: algorithms (zero rclpy dependencies)
-        │   │   │   ├── astar.py       # Space-time A* path planner
-        │   │   │   ├── conflict.py    # 4 conflict detectors (CELL, SWAP, ZONE, TTC)
-        │   │   │   ├── coordinator.py # Master coordination decision engine
-        │   │   │   ├── deadlock.py    # Distributed wait-for graph cycle detection
-        │   │   │   ├── geometry.py    # Continuous closest point of approach / TTC
-        │   │   │   ├── gridmap.py     # 2D occupancy grid & zone representation
-        │   │   │   ├── models.py      # Dataclasses
-        │   │   │   ├── peers.py       # Liveness & peer state tracking
-        │   │   │   ├── priority.py    # Deterministic total-order priority function
-        │   │   │   ├── tasks.py       # Auctioneer-free task auction logic
-        │   │   │   └── zone.py        # Ricart-Agrawala mutual exclusion protocol
-        │   │   └── nodes/         # ROS 2 Nodes
-        │   │       ├── fleet_agent_node.py    # Main coordinator node per robot
-        │   │       ├── fleet_monitor_node.py  # Live CLI fleet dashboard
-        │   │       ├── mock_robot_node.py     # Standalone mock robot (no Gazebo)
-        │   │       ├── qos_profiles.py        # Custom tuned QoS profiles
-        │   │       └── task_generator_node.py # Task generation & announcement
-        │   ├── config/            # CycloneDDS XMLs, fleet_params.yaml, warehouse_grid.yaml
-        │   ├── docs/              # 9 comprehensive architectural design docs
-        │   ├── launch/            # Launch files (mock, gazebo, single agent)
-        │   ├── models/amr_robot/  # Gazebo SDF robot model
-        │   ├── msg/               # 11 custom ROS 2 messages
-        │   ├── srv/               # Custom ROS 2 services (Replan.srv)
-        │   └── test/              # 62 unit tests (no ROS 2 installation required)
-        ├── amr_navigation/        # Nav2 integration & actuator gating (TO BE BUILT)
-        │   ├── CMakeLists.txt
-        │   └── package.xml
-        └── warehouse_sim/         # Gazebo simulation world & ros_gz_bridge
-            ├── config/bridge.yaml # Gazebo <-> ROS 2 topic bridge rules
-            ├── launch/            # single_amr.launch.py, three_amr.launch.py
-            └── worlds/            # warehouse.sdf (12m x 10m warehouse)
+```ini
+[wsl2]
+memory=8GB
+swap=8GB
+networkingMode=NAT
+dnsTunneling=false
 ```
 
----
+Then apply it:
 
-## 📡 Message & Coordination Protocol
+```powershell
+# POWERSHELL (any)
+wsl --shutdown
+```
 
-| Topic | Type | Scope | Direction / Role |
-|---|---|---|---|
-| `/clock` | `rosgraph_msgs/msg/Clock` | Global | Gazebo → ROS 2 simulation time |
-| `/robot_N/odom` | `nav_msgs/msg/Odometry` | Per-Robot | Wheel odometry (Gazebo → ROS) |
-| `/robot_N/scan` | `sensor_msgs/msg/LaserScan` | Per-Robot | 2D LiDAR readings (Gazebo → ROS) |
-| `/robot_N/cmd_vel` | `geometry_msgs/msg/Twist` | Per-Robot | Motor drive command (ROS → Gazebo) |
-| `/robot_N/motion_permit` | `amr_description/MotionPermit` | Per-Robot | Safety decision from coordinator to Nav2 |
-| `/robot_N/coordination_path` | `nav_msgs/msg/Path` | Per-Robot | Planned path with time claims |
-| `/fleet/robot_state` | `amr_description/RobotState` | Fleet-Wide | 10 Hz heartbeat & kinematic status |
-| `/fleet/intent` | `amr_description/Intent` | Fleet-Wide | Spatio-temporal cell reservations |
-| `/fleet/zone_request` | `amr_description/ZoneRequest` | Fleet-Wide | Mutex request for narrow aisles / intersections |
-| `/fleet/zone_grant` | `amr_description/ZoneGrant` | Fleet-Wide | Mutex grant response |
-| `/fleet/task_announce` | `amr_description/Task` | Fleet-Wide | New order / task published to fleet |
-| `/fleet/task_bid` | `amr_description/TaskBid` | Fleet-Wide | Peer bid based on distance & battery |
-| `/fleet/task_award` | `amr_description/TaskAward` | Fleet-Wide | Deterministic winner confirmation |
+The next WSL terminal you open starts with the new settings. NAT mode and
+dnsTunneling=false are required: the Webots driver inside WSL finds the
+Windows host through the NAT gateway address.
 
----
+## 4. One-time setup, WSL side
 
-## 🚀 Quickstart Guide
+Step 4.1 - install ROS 2 Jazzy (skip if `/opt/ros/jazzy` exists):
 
-### 1. Build the Workspace
 ```bash
-cd ros2_ws
-colcon build --symlink-install
+# WSL TERMINAL
+sudo apt update && sudo apt install -y software-properties-common curl
+sudo add-apt-repository universe
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+sudo apt update && sudo apt install -y ros-jazzy-desktop
+```
+
+Step 4.2 - clone the project:
+
+```bash
+# WSL TERMINAL
+cd /mnt/c/Users/<you>
+git clone https://github.com/sarthakyerpude/edgeswarm_2.git
+cd edgeswarm_2
+```
+
+Step 4.3 - run the setup script. It installs the remaining apt packages
+(Nav2, ros-gz, CycloneDDS, the Webots ROS 2 driver, colcon, pytest), builds
+the workspace, and prints the Windows checklist from section 3 again:
+
+```bash
+# WSL TERMINAL, inside /mnt/c/Users/<you>/edgeswarm_2
+./setup.sh
+```
+
+Expected last lines: `Build OK.` and `Setup complete. Start the fleet with
+./run.sh`. The build creates `build/`, `install/` and `log/` folders in the
+repo root; they are not committed.
+
+## 5. Running the project
+
+Everything is started by one script, from the repository root, in a WSL
+terminal:
+
+```bash
+# WSL TERMINAL
+cd /mnt/c/Users/<you>/edgeswarm_2
+./run.sh
+```
+
+This starts, in one go: Webots (headless) with the warehouse world and three
+robots, Nav2 for each robot, the fleet coordination nodes, the task
+generator, RViz, and the web UI.
+
+Startup takes 1 to 2 minutes. You will see `starting task feed` in the
+terminal when the fleet is healthy and tasks begin.
+
+Variants:
+
+```bash
+# WSL TERMINAL, repo root
+./run.sh gazebo                    # use the Gazebo backend instead of Webots
+./run.sh webots rviz:=false        # no RViz window, watch the web UI only
+./run.sh webots webots_gui:=true   # also show the Webots window
+```
+
+Any additional `name:=value` pairs are passed to the ROS launch, for example
+`task_interval_s:=15.0`.
+
+The script is a thin wrapper. The manual equivalent, useful when you want
+the two source lines in your own terminal session:
+
+```bash
+# WSL TERMINAL
+cd /mnt/c/Users/<you>/edgeswarm_2
+source /opt/ros/jazzy/setup.bash
 source install/setup.bash
+ros2 launch amr_navigation_runtime three_amr.launch.py sim:=webots
 ```
 
-### 2. Mode A: Mock Fleet (No Gazebo Needed)
-Test peer discovery, Ricart-Agrawala zone arbitration, and task auctioning in 2 seconds:
+Note: every new WSL terminal needs both `source` lines before any `ros2`
+command works.
+
+To stop the simulation press Ctrl+C in the terminal that runs it and wait a
+few seconds for the nodes to shut down.
+
+## 6. Using the fleet
+
+Where to look while it runs:
+
+- Web UI: open http://localhost:8080 in any Windows browser. It shows the
+  live map, lanes, junction boxes, landmarks, robot hitboxes with heading,
+  task list and per-robot status. Manoeuvre badges appear as U-TURN,
+  REVERSING or OVERTAKING.
+- RViz window: opens automatically unless `rviz:=false`. Shows hitboxes
+  with front markers, planned paths, rack slot labels and live lidar
+  points. Camera presets are in the Views panel.
+- Terminal: fleet events are logged (WON, pickup reached, delivered,
+  DEADLOCK, OVERTAKE and so on).
+
+Creating a task: tasks are generated automatically. To create one manually,
+click a rack section in the web UI map (sections are labeled 1R1 to 12R20),
+or type a slot into the task bar.
+
+Aborting a task: press the Abort button on a task row. Abort works only
+before the robot has picked the item up; afterwards the robot refuses and
+finishes the delivery.
+
+## 7. Tests and evaluation
+
+Pure python test suite (no simulator needed, about 90 seconds):
+
 ```bash
-ros2 launch amr_description three_robots_mock.launch.py
+# WSL TERMINAL
+cd /mnt/c/Users/<you>/edgeswarm_2/src/amr_description
+source /opt/ros/jazzy/setup.bash
+python3 -m pytest test/
 ```
 
-### 3. Mode B: Full Gazebo Simulation
+Live scorecard (run while the simulation is up, in a SECOND WSL terminal):
+
 ```bash
-# Terminal 1: Launch 3-AMR Gazebo simulation and bridge
-ros2 launch warehouse_sim three_amr.launch.py
-
-# Terminal 2: Launch the 3 decentralized fleet agents & monitor
-ros2 launch amr_description three_robots_gazebo.launch.py
+# WSL TERMINAL (second one)
+cd /mnt/c/Users/<you>/edgeswarm_2
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$PWD/src/webots_warehouse_sim/resource/cyclonedds.xml
+python3 tools/fleet_eval.py 480
 ```
 
----
+It prints an 8 minute scorecard: deliveries, per-robot localization error,
+lane centring, arrival accuracy, robot separations and contacts.
 
-## 📊 Project Status: Built vs. Left to Build
+Lidar honesty check (same second-terminal environment):
+
+```bash
+# WSL TERMINAL (second one), same exports as above
+python3 tools/lidar_probe.py
+```
+
+Offline traffic scenarios without ROS (fast, used for development):
+
+```bash
+# WSL TERMINAL
+cd /mnt/c/Users/<you>/edgeswarm_2/src/amr_description
+python3 test/fleet_sim.py random 600 --seed 7
+```
+
+## 8. Rebuilding after code changes
+
+```bash
+# WSL TERMINAL, repo root
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install                                      # everything
+colcon build --symlink-install --packages-select amr_description   # one package
+```
+
+Python files are symlinked, so plain .py edits inside already-built packages
+take effect on the next launch without rebuilding. Rebuild when you change
+message definitions (msg/), launch files, worlds, or add new files.
+
+## 9. Project structure
 
 ```
-[████████████████████░░░░░░░░░░] 65% Completed
+run.sh                       start everything (section 5)
+setup.sh                     one-time setup (section 4)
+SETUP.md                     this guide's long-form companion
+src/amr_description          fleet core: auction, traffic rules, safety
+                             envelope, planner, ROS messages, grid config,
+                             web UI, test suite and offline simulator
+src/amr_navigation_runtime   Nav2 parameters, launch files, velocity gate,
+                             goal bridge, AMCL map
+src/webots_warehouse_sim     Webots world (racks, landmarks, robots) and
+                             robot drivers
+src/warehouse_sim            Gazebo world and bridges
+tools/fleet_eval.py          live scorecard
+tools/lidar_probe.py         lidar honesty check
+docs/images/                 README screenshots
 ```
 
-### ✅ What is Completed & Validated
-- [x] **Pure-Python Core Algorithms (`amr_fleet/core`)**:
-  - Deterministic priority function with anti-starvation ceilings.
-  - 4-way conflict detection (overlapping cell time-windows, head-on swap, zone contention, continuous TTC).
-  - Ricart-Agrawala distributed mutual exclusion for narrow aisles.
-  - Cycle detection on distributed wait-for graphs for deadlock breaking.
-  - Auctioneer-free task bidding and assignment.
-  - Space-time A* path planning on occupancy grids.
-- [x] **ROS 2 Fleet Integration (`amr_fleet/nodes`)**:
-  - `fleet_agent_node`, `fleet_monitor_node`, `task_generator_node`, `mock_robot_node`.
-  - 11 custom message definitions and 1 service.
-  - 62 unit tests passing without requiring ROS runtime.
-- [x] **Warehouse Simulation (`warehouse_sim`)**:
-  - 12m × 10m warehouse SDF world with racks, aisles, dropoffs.
-  - Multi-AMR Gazebo launch file (`three_amr.launch.py`).
-  - Multi-AMR `ros_gz_bridge` configuration (`bridge.yaml`).
+## 10. Key configuration files
 
-### 🔨 What is Left to Build
-1. **AMR Robot Description (URDF / Xacro)**:
-   - Create `amr.urdf.xacro` with parameterized namespacing (`prefix="robot_N/"`).
-   - Add `robot_state_publisher` and `joint_state_publisher` to publish proper TF trees (`base_footprint -> base_link -> wheels, laser_link, imu_link`).
-   - Create `display.launch.py` and RViz configuration (`amr.rviz`).
-   - Add virtual IMU sensor definition and bridge topic `/robot_N/imu/data`.
-2. **Autonomous Navigation (`amr_navigation`)**:
-   - Currently an empty package skeleton.
-   - Configure Nav2 stack (`planner_server`, `controller_server`, `bt_navigator`, `costmap_2d`).
-   - Implement AMCL localization against warehouse map.
-   - Build velocity interceptor node: gate Nav2 `cmd_vel_raw` using `motion_permit` before sending to `/cmd_vel`.
-3. **Zenoh Communication Integration**:
-   - Test and configure `rmw_zenoh_cpp` / `zenoh-bridge-ros2dds` for peer-to-peer Wi-Fi deployment.
-4. **Edge AI Enhancements (Optional)**:
-   - Add congestion heatmap forecaster to adapt Space-Time A* heuristic costs.
-   - Add learned task valuation for auction bids.
+- `src/amr_description/config/warehouse_grid.yaml`: occupancy grid, rack
+  slots, lanes, junctions, turnarounds, landmarks. After changing the world,
+  regenerate with `python3 src/amr_description/scripts/warehouse_map_tool.py
+  write-grid` and `write-pgm`.
+- `src/amr_navigation_runtime/config/nav2_params.yaml`: Nav2 controller,
+  AMCL and collision monitor settings. Tuned values carry comments
+  explaining why.
+- `src/amr_description/config/fleet_params.yaml`: fleet cruise speed,
+  docking tolerances, peer timeouts.
+- `src/amr_navigation_runtime/config/velocity_gate.yaml`: the hard speed
+  cap between Nav2 and the wheels.
+
+## 11. Troubleshooting
+
+- Web UI stops loading after a simulation restart: Windows' WSL port relay
+  holds the dead connection. Close the browser tab completely and open
+  http://localhost:8080 again.
+- `ros2: command not found`: you forgot the source lines. Run
+  `source /opt/ros/jazzy/setup.bash` and `source install/setup.bash` in that
+  terminal.
+- Robots never spawn, log shows controller connection errors: the firewall
+  rule for TCP 1234 is missing (section 3.3), or Webots is not at
+  `C:\Program Files\Webots`.
+- `AMENT_TRACE_SETUP_FILES: unbound variable`: you are sourcing ROS inside a
+  script with `set -u`. Use ./run.sh, which handles it.
+- Everything is slow, robots stop and report stale peers: WSL is memory or
+  CPU starved. Give it 8 GB plus 8 GB swap (section 3.4), close RViz if the
+  web UI is enough, and avoid heavy builds while the sim runs.
+- Webots exits on its own after 10 to 16 minutes on some machines: known
+  host limitation, just start again with ./run.sh.
+- Build errors after pulling new code: rebuild everything once
+  (`colcon build --symlink-install`); if messages changed, also restart any
+  running terminals so stale environments are gone.
+
+## 12. Known limitations
+
+- Localization accuracy plateaus around 0.14 m mean and 0.4 m worst-case
+  under load. Robots recover automatically from localization losses, but
+  brief rack-face grazes can still occur at error peaks. The planned next
+  step is scan-to-map ICP correction on top of AMCL.
+- The degraded-localization fallback mode restarts a waiting robot about
+  5 s after a junction clears, above the 1.5 s design target.
+- One run supports three robots; scaling beyond needs discovery and
+  bandwidth work noted in the project wiki.

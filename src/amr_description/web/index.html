@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EdgeSwarm Live</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <strong>EdgeSwarm</strong><span class="muted">Live warehouse</span>
+    </div>
+    <div class="summary" id="summary"></div>
+    <span class="conn" id="conn" data-state="connecting">Connecting…</span>
+  </header>
+
+  <main class="layout">
+    <section class="card map-card">
+      <div class="toolbar">
+        <button class="btn primary" id="newTask" title="Create a task (N)">+ New task</button>
+        <div class="draft" id="draft" hidden>
+          <span class="step" id="draftHint">Click the PICKUP point</span>
+          <input class="slot-in" id="pickSlot" list="slotList" placeholder="pickup e.g. 1R6"
+                 aria-label="Pickup rack slot" autocomplete="off" spellcheck="false">
+          <input class="slot-in" id="dropSlot" list="slotList" placeholder="drop e.g. 12R5"
+                 aria-label="Drop rack slot" autocomplete="off" spellcheck="false">
+          <datalist id="slotList"></datalist>
+          <label class="prio">Priority
+            <select id="priority">
+              <option value="0">0 · low</option>
+              <option value="1" selected>1 · normal</option>
+              <option value="2">2 · high</option>
+              <option value="3">3 · urgent</option>
+            </select>
+          </label>
+          <button class="btn primary" id="confirm" disabled title="Enter">Send task</button>
+          <button class="btn" id="cancel" title="Esc">Cancel</button>
+        </div>
+        <span class="spacer"></span>
+        <span class="cursor muted" id="cursor"></span>
+        <button class="btn ghost" id="fit" title="Reset view (double-click map)">Fit</button>
+      </div>
+      <div class="layers" id="layers">
+        <span class="muted">P2P layers</span>
+        <label class="ltoggle" title="Two-way lanes and the junctions where flows cross"><input type="checkbox" data-layer="roads"> Lanes &amp; junctions</label>
+        <label class="ltoggle"><input type="checkbox" data-layer="hitboxes"> Hitboxes</label>
+        <label class="ltoggle"><input type="checkbox" data-layer="links"> Peer links</label>
+        <label class="ltoggle"><input type="checkbox" data-layer="intents"> Shared intents</label>
+        <label class="ltoggle" title="Shared mutex zones, not robot bodies"><input type="checkbox" data-layer="locks"> Zone locks &amp; waits</label>
+        <label class="ltoggle"><input type="checkbox" data-layer="blocked"> Shared blockages</label>
+      </div>
+      <div class="map-wrap" id="mapWrap">
+        <canvas id="map" aria-label="Live warehouse map"></canvas>
+        <div class="loading" id="loading">Loading warehouse map…</div>
+      </div>
+      <div class="legend">
+        <span><i class="sw rack"></i>Rack / wall</span>
+        <span><i class="sw tight"></i>Too tight for a stop</span>
+        <span><i class="sw zone"></i>Shared zone</span>
+        <span><i class="sym pick">▲</i>Pickup station</span>
+        <span><i class="sym drop">▼</i>Drop station</span>
+        <span><i class="sym dock">⚡</i>Dock / charger</span>
+        <span><i class="sym carry">▶</i>Carrying (object picked)</span>
+        <span class="muted">Scroll to zoom · drag to pan</span>
+      </div>
+    </section>
+
+    <aside class="side">
+      <nav class="side-tabs" role="tablist" aria-label="Sidebar">
+        <button class="stab active" data-pane="status" role="tab">Status <span class="count" id="cStatus"></span></button>
+        <button class="stab" data-pane="network" role="tab">Network <span class="count" id="cNetwork"></span></button>
+        <button class="stab" data-pane="tasks" role="tab">Tasks <span class="count" id="cTasks"></span></button>
+      </nav>
+      <div class="side-body" id="sideBody">
+        <div class="pane" id="pane-status" role="tabpanel">
+          <section class="card">
+            <h2>Robots</h2>
+            <div id="robots" class="robots"></div>
+          </section>
+        </div>
+        <div class="pane" id="pane-network" role="tabpanel" hidden>
+          <section class="card">
+            <div class="card-head">
+              <h2>P2P network</h2>
+              <span class="badge" id="transport">…</span>
+            </div>
+            <div class="tabs" id="p2pTabs" role="tablist">
+              <button class="tab active" data-ptab="feed" role="tab">Live feed</button>
+              <button class="tab" data-ptab="net" role="tab">Links &amp; traffic</button>
+            </div>
+            <div id="feedPane">
+              <div class="filters" id="feedFilters"></div>
+              <div class="feed" id="feed"></div>
+            </div>
+            <div id="netPane" class="net" hidden></div>
+          </section>
+        </div>
+        <div class="pane" id="pane-tasks" role="tabpanel" hidden>
+          <section class="card">
+            <div class="tabs" id="taskTabs" role="tablist">
+              <button class="tab active" data-tab="active" role="tab">Active <span id="nActive">0</span></button>
+              <button class="tab" data-tab="done" role="tab">Done <span id="nDone">0</span></button>
+            </div>
+            <div class="tasks-scroll">
+              <table class="tasks">
+                <thead><tr><th>Task</th><th>Pickup → Drop</th><th>P</th><th>Status</th><th>Robot</th><th></th></tr></thead>
+                <tbody id="tasks"></tbody>
+              </table>
+            </div>
+            <p class="hint muted">Tasks can be aborted until the robot reaches the pickup.</p>
+          </section>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

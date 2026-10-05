@@ -1,0 +1,417 @@
+# =============================================================================
+# warehouse_grid.yaml - Gazebo-aligned coordination map
+# =============================================================================
+#
+# Source geometry supplied by the warehouse Gazebo team: 12 m x 10 m world,
+# centered at world (0,0). Grid convention is row -> Y and column -> X.
+# resolution is 0.10 m so the supplied pickup/drop-off markers land exactly
+# on grid-cell centers. Origin is the world coordinate of cell (0,0) corner.
+#
+meta:
+  name: warehouse_v1
+  resolution: 0.1
+  width_cells: 120
+  height_cells: 100
+  origin: [-6.0, -5.0]
+
+# R7 equal aisles: north aisle, aisle A, aisle B and the N-S spine are all
+# aisle_width_m wide (wall/rack face to rack face). Racks are 5.0 x 0.6 m;
+# the 0.2 m end gaps to the side walls are narrower than a robot (0.32 m).
+# Racks numbered left->right, top->bottom; world metres.
+aisle_width_m: 1.6
+racks:
+  - {id: 1, x_min: -5.8, x_max: -0.8, y_min: 2.8, y_max: 3.4}
+  - {id: 2, x_min: 0.8, x_max: 5.8, y_min: 2.8, y_max: 3.4}
+  - {id: 3, x_min: -5.8, x_max: -0.8, y_min: 0.6, y_max: 1.2}
+  - {id: 4, x_min: 0.8, x_max: 5.8, y_min: 0.6, y_max: 1.2}
+  - {id: 5, x_min: -5.8, x_max: -0.8, y_min: -1.6, y_max: -1.0}
+  - {id: 6, x_min: 0.8, x_max: 5.8, y_min: -1.6, y_max: -1.0}
+
+# R11 localization landmarks (static, lidar-visible, in the occupancy below
+# and in warehouse.wbt / warehouse_map.pgm). The R7 equalization made the
+# warehouse lidar-self-similar (all aisles 1.6 m, all racks 5.0 m) and AMCL
+# scan matching aliased: 0.18 m mean / 0.46 m max believed-vs-true error,
+# robots wedged on rack faces with permit GO (webots_remeasure). These three
+# asymmetric solids re-anchor every pass through the south operating area and
+# the spine throat. They sit OFF every lane, turnaround, station approach and
+# station-to-station A* route with >= 0.35 m from each routed line (the
+# fleet-wide lane-to-face minimum); pinned by test_layout_consistency.py.
+landmarks:
+  - {id: pillar_se, x_min: 1.2, x_max: 1.5, y_min: -4.7, y_max: -4.4}
+  - {id: fin_w, x_min: -6.0, x_max: -5.4, y_min: -2.5, y_max: -2.3}
+  - {id: fin_e, x_min: 5.6, x_max: 6.0, y_min: -3.7, y_max: -3.5}
+  # Round 2 (loc_validate): along-track error survived round 1 because a
+  # corridor endpoint displaced ALONG the corridor stays near the side walls
+  # and the likelihood field barely penalizes it. Mid-aisle-height fins on
+  # the aisle END walls add range steps/corners the side walls cannot
+  # absorb, with distinct (width, y-offset) per aisle and per end. They
+  # occupy only the |x| >= 5.8 wall band, which was already planner-dead
+  # (clearance < 0.225 against the border ring), so no usable turnaround or
+  # route cell is lost. The north aisle and aisle A west CANNOT host fins:
+  # the SP_NW/SP_NE/SP_AW zone rects reach the ring columns and zone cells
+  # must stay static-free (test_grid_config); the trace had no bad samples
+  # in aisle N. fin_s (south wall, west half) covers the drop row when
+  # peers occlude the SE pillar.
+  - {id: end_a_e, x_min: 5.8, x_max: 6.0, y_min: 1.9, y_max: 2.2}
+  - {id: end_b_w, x_min: -6.0, x_max: -5.8, y_min: -0.3, y_max: 0.0}
+  - {id: end_b_e, x_min: 5.8, x_max: 6.0, y_min: -0.3, y_max: -0.1}
+  - {id: fin_s, x_min: -1.9, x_max: -1.3, y_min: -5.0, y_max: -4.8}
+  # Round 3 (loc_validate2): the SP_* zone rects were trimmed (R12, zones
+  # above) to free the never-drivable wall band in the north aisle and
+  # aisle A west, completing a distinct end signature for EVERY aisle end -
+  # the round-2 residual along-track error sat exactly in the two fin-less
+  # regions (aisle A west mean 0.18, aisle N east mean 0.24).
+  - {id: end_n_w, x_min: -6.0, x_max: -5.8, y_min: 3.4, y_max: 3.6}
+  - {id: end_n_e, x_min: 5.8, x_max: 6.0, y_min: 4.1, y_max: 4.5}
+  - {id: end_a_w, x_min: -6.0, x_max: -5.8, y_min: 1.9, y_max: 2.1}
+
+# . = navigable, # = warehouse wall or rack.
+occupancy:
+  - "########################################################################################################################"
+  - "#........................................######........................................................................#"
+  - "#......................................................................................................................#"
+  - "#.......................................................................###............................................#"
+  - "#.......................................................................###............................................#"
+  - "#.......................................................................###............................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#...................................................................................................................####"
+  - "#...................................................................................................................####"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "######.................................................................................................................#"
+  - "######.................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "##....................................................................................................................##"
+  - "##....................................................................................................................##"
+  - "##.....................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "##....................................................................................................................##"
+  - "##....................................................................................................................##"
+  - "#.....................................................................................................................##"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "####################################################................####################################################"
+  - "##.....................................................................................................................#"
+  - "##.....................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#.....................................................................................................................##"
+  - "#.....................................................................................................................##"
+  - "#.....................................................................................................................##"
+  - "#.....................................................................................................................##"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "#......................................................................................................................#"
+  - "########################################################################################################################"
+
+# Traffic zones (increment 2 of wiki/Plan-P2P-Coordination.md; rules, ranks
+# and the cell table are in wiki/Traffic-Lanes.md). Every zone is a
+# capacity-1 Ricart-Agrawala mutex. A robot stops at an acquisition point
+# (a wait bay when entering from the south, the spur mouth when leaving a
+# spur), acquires the zones its path needs strictly in ascending rank
+# (rank, then zone id), and enters only when it holds all of them.
+# Havender ordering: no hold-and-wait cycle is possible.
+#   SP_* (0) < SPINE_S (1) < SPINE_M (2) < SPINE_N (3) < J_N (4) < J_AW (5)
+# rect = [r0, c0, r1, c1] inclusive, row -> Y, col -> X.
+# The pre-increment-2 zones (inter_X1, aisle_A1, aisle_A2 = PHYSICAL aisle B,
+# choke_CP1) live on in test/fixtures/warehouse_grid_legacy.yaml.
+zones:
+  # Spurs: the dead-end aisle segments with a pickup. One robot per spur.
+  # R12 (round-3 localization): the SP_* rects start at col 2 / end at col
+  # 117 instead of 1/118, excluding ONLY the |x| >= 5.8 side-wall band so the
+  # dead-end localization fins (landmarks below) fit in the north aisle and
+  # aisle A west. Those columns were never drivable (clearance against the
+  # border ring < CLEARANCE_LETHAL 0.225, so A* never routed into them and
+  # no robot hitbox ever occupied them): SPINE-fallback mutex behaviour is
+  # bitwise unchanged. The zone static-free contract (test_grid_config)
+  # holds by exclusion, not by weakening.
+  SP_AW:            # aisle A west, pickup L3 (74,25) = slot 2R10 (rack 1 south face)
+    type: spur
+    rect: [62, 2, 77, 51]
+    capacity: 1
+    rank: 0
+  SP_NW:            # north aisle west, pickup L1 (88,25) = slot 1R10
+    type: spur
+    rect: [84, 2, 98, 51]
+    capacity: 1
+    rank: 0
+    # SPINE-fallback only (R10 fix): as an always-on mutex each spur made
+    # HALF the two-abreast north aisle single-file, and a head-on across the
+    # two spurs could never resolve - each robot occupied the zone the other
+    # needed, with no refuge in the aisle (measured: permanent ~17 s yo-yo,
+    # 0/2 deliveries, RANK EXCEPTION spam). In LANES mode the aisle is
+    # governed like aisle A by the rect envelope + lateral reroute; J_N
+    # keeps its capacity-1 rank as the R10 junction.
+    modes: [SPINE]
+  SP_NE:            # north aisle east, pickup L2 (88,94) = slot 3R11
+    type: spur
+    rect: [84, 68, 98, 117]    # col 118 excluded: R12 wall band, see SP_AW
+    capacity: 1
+    rank: 0
+    modes: [SPINE]  # see SP_NW
+  # The 1.6 m centre spine between the rack columns plus its south throat.
+  # R10: the old whole-corridor SPINE mutex [28,52,83,67] is re-cut into 3
+  # junction-bounded SEGMENTS so the ENTIRE corridor is never one lock. The
+  # boundaries derive from the rack rows (racks 5/6 rows 34-39, racks 3/4
+  # rows 56-61, racks 1/2 rows 78-83): each segment runs up to the row where
+  # an aisle crossing (junction) begins, so a robot can wait at a junction
+  # while another crosses, and two robots can occupy DIFFERENT segments at
+  # once. Ranks ascend northward and J_N/J_AW stay ABOVE the segments, so
+  # the Havender acquisition order stays deadlock-free:
+  #   SP_* (0) < SPINE_S (1) < SPINE_M (2) < SPINE_N (3) < J_N (4) < J_AW (5)
+  # Zones are released as soon as the robot's hitbox clears them
+  # (coordinator._occupies), never on a timer.
+  SPINE_S:          # south throat + rack-row-5/6 stretch; ends at the
+    type: corridor  # aisle-B crossing (row 40)
+    rect: [28, 52, 39, 67]
+    capacity: 1
+    rank: 1
+    modes: [SPINE]
+  SPINE_M:          # aisle-B crossing + rack-row-3/4 stretch; ends at the
+    type: corridor  # aisle-A crossing (row 62)
+    rect: [40, 52, 61, 67]
+    capacity: 1
+    rank: 2
+    modes: [SPINE]
+  SPINE_N:          # aisle-A crossing + rack-row-1/2 stretch; ends at J_N
+    type: corridor  # (row 84)
+    rect: [62, 52, 83, 67]
+    capacity: 1
+    rank: 3
+    modes: [SPINE]
+  J_N:              # north turnaround (spine top x north aisle)
+    type: intersection
+    rect: [84, 52, 98, 67]
+    capacity: 1
+    rank: 4
+  J_AW:             # west half of the aisle-A crossing (inside SPINE_N)
+    type: intersection
+    rect: [62, 52, 77, 59]
+    capacity: 1
+    rank: 5
+
+# Unranked traffic furniture (not mutexes). Every cell below was checked
+# against the occupancy: free, clearance >= 0.3 m from racks and walls, and
+# off every station-to-station A* route (test_traffic_zones.py).
+traffic:
+  # Requested mode. LANES (increment 4, R3/R7): two directed lanes through
+  # the 1.6 m spine band; the EFFECTIVE mode comes from traffic.select_mode
+  # and drops to SPINE (the capacity-1 mutex below, modes: [SPINE]) at once
+  # whenever any robot near the band localizes worse than sigma_lanes_m or a
+  # peer there is SUSPECT/SILENT.
+  mode: LANES
+  # ROAD MODEL (user order, webots_final4): NO reservations anywhere -
+  # robots move freely on two-way keep-right roads; conflicts resolve at
+  # the box junctions below (right-of-way + don't-block-the-box) and by
+  # the safety envelope. true re-enables the legacy ranked-zone mutexes
+  # (kept for fixtures/unit tests only).
+  reservations: false
+  # Gate thresholds live in core/traffic.py (LANE_SIGMA_MAX / LANE_SIGMA_EXIT);
+  # this value is informational. Hysteresis: ENTER at <= 0.18 sustained 3 s,
+  # LEAVE at >= 0.30 sustained 5 s (ghost/LOC_LOST near the band drops at once).
+  sigma_lanes_m: 0.18
+  # Lane band = SPINE rect extended into the south throat (rows 25-27).
+  # axis v: northbound keeps col centre_pos (x=+0.45), southbound keeps
+  # centre_neg (x=-0.45); the divider is at col 59.5 (x=0.0).
+  # Centres moved 63.5/55.5 -> 64/55 (webots_final4 fix): the old fractional
+  # centres made A* track integer cols 63/56 (x=+-0.35), leaving a 0.70 m
+  # centre offset = 0.29 m lateral rect gap, 3 cm above the sigma-floor pass
+  # threshold (0.26) - every pass dithered STOP/GO on tracking wobble. At
+  # +-0.45 the pass gap is 0.49 m (clears the threshold up to sigma ~0.12
+  # per robot) and the wall clearance is 0.35 m to the rack faces, the same
+  # minimum every station route already has.
+  lanes:
+    spine: {rect: [25, 52, 83, 67], axis: v, centre_pos: 64, centre_neg: 55}
+    # ROAD MODEL in/out lanes (user order, 2026-10-04): every aisle is a
+    # dead-end spur off the spine, entered on one keep-right lane and left
+    # on the other. axis h: EB (+x) keeps centre_pos = the SOUTH lane, WB
+    # keeps centre_neg = the NORTH lane; both 0.35 m from the rack faces
+    # like the spine. Where a band crosses the spine the cells are a
+    # junction box (gridmap.lane_step_cost): vertical steps obey the spine,
+    # horizontal steps the aisle, so turns are square.
+    spine_n: {rect: [84, 52, 98, 67], axis: v, centre_pos: 64, centre_neg: 55}
+    # aisle_n WB moved 95 -> 94 (corner/rotation fixes, 2026-10-04,
+    # webots_strictlanes1): the north WALL face is y 4.90 (occupancy row 99),
+    # so the old WB line y 4.55 left 0.35 m - but the collision monitor's
+    # 0.45 m forward StopZone reaches 4.55 + 0.45 = 5.00 > 4.90, i.e. ANY
+    # forward command with a wallward heading component at that line is
+    # stopped (robot_1 wedged there with GO after the NB->WB turn at J_N;
+    # rotation was blocked too before the rotation velocity-polygon fix).
+    # At y 4.45 (row 94): wall clearance 0.45 m; straight WB travel clears
+    # the forward box (lateral 0.17 m), entries/jogs clear the slow-speed
+    # 0.30 m box with >= 0.10 m margin, and the 0.33 m rotation polygon
+    # spins with 0.12 m to spare. Costs accepted and verified: opposing
+    # EB<->WB pass separation drops 0.8 -> 0.7 m (lateral rect gap 0.29 m,
+    # above the sigma-floor threshold 0.2614 but dither-prone at sigma >=
+    # 0.06 - the envelope stops are safe); a WB robot passing a robot parked
+    # at the row-88 pickups has gap 0.19 m < threshold, so it WAITS out the
+    # 2 s dwell or (stationary >= 7 s) takes the gated overtake. EB stays at
+    # 87: the rack-face clearance 0.35 m is the fleet-wide minimum and the
+    # row-88 pickups sit on the EB side.
+    aisle_n: {rect: [84, 1, 98, 118], axis: h, centre_pos: 87, centre_neg: 94}
+    aisle_a: {rect: [62, 1, 77, 118], axis: h, centre_pos: 65, centre_neg: 74}
+    aisle_b: {rect: [40, 1, 55, 118], axis: h, centre_pos: 43, centre_neg: 52}
+  # -------------------------------------------------------------------------
+  # ROAD MODEL geometry for the webapp (machine-readable; schema agreed with
+  # the webapp session). Derived from the SAME numbers the core uses (the
+  # lane band above and the ranked-zone rects; pinned by
+  # test_lanes.test_road_geometry_matches_lane_band): corridors are two-way
+  # keep-right streets, junctions are the only conflict points. Centrelines
+  # in world metres, polylines in travel order. NB=+y SB=-y EB=+x WB=-x.
+  road_lanes:
+    - {id: SPINE_NB, direction: NB, polyline: [[0.45, -2.45], [0.45, 3.35]]}
+    - {id: SPINE_SB, direction: SB, polyline: [[-0.45, 3.35], [-0.45, -2.45]]}
+    - {id: AISLE_A_EB, direction: EB, polyline: [[-5.75, 1.55], [5.75, 1.55]]}
+    - {id: AISLE_A_WB, direction: WB, polyline: [[5.75, 2.45], [-5.75, 2.45]]}
+    - {id: AISLE_B_EB, direction: EB, polyline: [[-5.75, -0.65], [5.75, -0.65]]}
+    - {id: AISLE_B_WB, direction: WB, polyline: [[5.75, 0.25], [-5.75, 0.25]]}
+    - {id: AISLE_N_EB, direction: EB, polyline: [[-5.75, 3.75], [5.75, 3.75]]}
+    # y 4.55 -> 4.45 with the aisle_n band's centre_neg above.
+    - {id: AISLE_N_WB, direction: WB, polyline: [[5.75, 4.45], [-5.75, 4.45]]}
+  # BOX junctions (schema agreed with the webapp): the conflict area is the
+  # rectangular crossing of the two road bands (half_size = [w/2, h/2] in
+  # metres). Same rects as the J_N / J_AW intersection zones above.
+  junctions:
+    - {id: J_N, center: [0.00, 4.15], half_size: [0.80, 0.75]}
+    - {id: J_AW, center: [0.00, 2.00], half_size: [0.80, 0.80]}
+  # TURNAROUND zones (strict directional lanes, 2026-10-04): the designated
+  # U-turn / lane-crossing boxes at each aisle's dead end. Schema agreed with
+  # the webapp (world metres, half_size = [w/2, h/2]; stable ids - the webapp
+  # may render them later). Inside a turnaround (or a junction box, where two
+  # lane bands overlap) the planner's wrong-way lane cost drops from the
+  # forbidden LANE_WRONG_SIDE_HARD to the soft LANE_WRONG_SIDE, so a robot
+  # can swing through a U-turn; everywhere else driving against a lane's
+  # direction is planner-forbidden (gridmap.in_crossing_zone is the single
+  # authority the coordinator's U-turn gate and the trajectory audit use).
+  # Each box spans the full 1.5-1.6 m aisle height and the last 1.0 m before
+  # the wall. All cells statically free EXCEPT the |x| >= 5.8 side-wall band
+  # (cols 0-1 / 118-119), where the round-2 localization fins (landmarks
+  # above) occupy a few rows - that band was already planner-dead against
+  # the border ring (clearance < 0.225), and U-turn sweeps reach |x| <= 5.71,
+  # so no usable turnaround cell is lost (test_road_lanes +
+  # test_layout_consistency pin both facts).
+  turnarounds:
+    - {id: TA_N_W, center: [-5.4, 4.15], half_size: [0.5, 0.75]}
+    - {id: TA_N_E, center: [5.4, 4.15], half_size: [0.5, 0.75]}
+    - {id: TA_A_W, center: [-5.4, 2.0], half_size: [0.5, 0.8]}
+    - {id: TA_A_E, center: [5.4, 2.0], half_size: [0.5, 0.8]}
+    - {id: TA_B_W, center: [-5.4, -0.2], half_size: [0.5, 0.8]}
+    - {id: TA_B_E, center: [5.4, -0.2], half_size: [0.5, 0.8]}
+    # SOUTH-THROAT APRON (rows 25-27 x cols 52-67): the spine band's south
+    # mouth, where routes merge between the open dropoff floor and the NB/SB
+    # lanes. The trajectory audit's only wrong-lane samples were 0.1-1.3 s
+    # follower corner-cuts here (diagonal merge headings across the SB
+    # half); the apron legalizes that merge geometry - it is a crossing
+    # zone, not a parking spot, and no route behaviour changes.
+    - {id: TA_SPINE_S, center: [0.0, -2.35], half_size: [0.8, 0.15]}
+    # SPUR-MOUTH APRONS: a small box around each designated retreat cell
+    # (traffic.retreat_cells below). Parking at / resuming from a mid-band
+    # pull-over swings the chassis across the local divider for a moment
+    # (audit sample at (48,47) beside the aisle-B west mouth); the aprons
+    # make that manoeuvre legal at all three engineered spots.
+    - {id: TA_B_WM, center: [-1.25, -0.2], half_size: [0.25, 0.2]}
+    - {id: TA_B_EM, center: [1.25, -0.2], half_size: [0.25, 0.2]}
+    - {id: TA_A_EM, center: [1.25, 2.1], half_size: [0.25, 0.2]}
+  # Pull-over pockets: two-abreast refuge/make-way cells in the east and
+  # west refuge aisles (tier-1 targets; the R3 'third robot' capacity).
+  pockets: [[66, 80], [74, 80], [44, 80], [52, 80], [44, 40], [52, 40]]
+  # Refuges: closed to through-routing. A* charges `cost` per cell unless the
+  # goal lies in the same refuge. Deadlock victims retreat into them.
+  refuges:
+    R_AE: {rect: [62, 68, 77, 117], cost: 1000}   # aisle A east
+    R_BW: {rect: [40, 2, 55, 51], cost: 1000}     # aisle B west
+    R_BE: {rect: [40, 68, 55, 117], cost: 1000}   # aisle B east
+  # Off-lane acquisition points for robots entering the spine from the south.
+  wait_bays:
+    WB_W: [30, 35]
+    WB_E: [30, 85]
+  # Spur-mouth parking cells beside the spine, for deadlock victims.
+  retreat_cells:
+    - [47, 47]        # aisle B west mouth (-1.25, -0.25)
+    - [47, 72]        # aisle B east mouth (+1.25, -0.25)
+    - [70, 73]        # aisle A east mouth (+1.35, +2.05)
+
+stations:
+  # Pickups are rack-slot approach cells (R8 naming, core/rack_slots.py):
+  # face-segment centre offset aisle_width_m/4 into the aisle.
+  L1:       {cell: [88, 25], type: loading}   # 1R10 (-3.425, 3.80)
+  L2:       {cell: [88, 94], type: loading}   # 3R11 (+3.425, 3.80)
+  L3:       {cell: [74, 25], type: loading}   # 2R10 (-3.425, 2.40)
+  # Gazebo-team drop-off markers.
+  P1:       {cell: [22, 30], type: packing}
+  P2:       {cell: [22, 60], type: packing}
+  P3:       {cell: [22, 90], type: packing}
+  # Explicit marker names for readability in future task/config tooling.
+  PICKUP_1:  {cell: [88, 25], type: loading}
+  PICKUP_2:  {cell: [88, 94], type: loading}
+  PICKUP_3:  {cell: [74, 25], type: loading}
+  DROPOFF_1: {cell: [22, 30], type: packing}
+  DROPOFF_2: {cell: [22, 60], type: packing}
+  DROPOFF_3: {cell: [22, 90], type: packing}
+  CHG1:      {cell: [22, 15], type: charging}
+  CHG2:      {cell: [22, 60], type: charging}
+  CHG3:      {cell: [22, 105], type: charging}

@@ -1,7 +1,15 @@
-ros2_ws/build/
-ros2_ws/install/
-ros2_ws/log/
-**/__pycache__/
+# colcon / build artifacts (any level)
+build/
+install/
+log/
+__pycache__/
 *.pyc
-.vscode/
-.env*
+# legacy workspace dir kept on disk for old build artifacts only
+ros2_ws/
+# run/diagnostic output
+*.log
+*.csv
+# docs live in the project wiki; only SETUP.md is kept in-repo
+*.md
+!/SETUP.md
+!/README.md

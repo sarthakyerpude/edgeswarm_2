@@ -1,0 +1,7 @@
+velocity_gate:
+  ros__parameters:
+    permit_timeout_s: 0.5
+    command_timeout_s: 0.25
+    max_linear_x: 0.6     # fleet cruise cap: 1.5x the original 0.4 (1.0 scraped racks, 2026-10-04)
+    max_angular_z: 1.5
+    publish_rate_hz: 20.0
